@@ -1,8 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('shows header logo and toggles sidebar', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+
+  expect(screen.getByAltText(/logo joviat/i)).toBeInTheDocument();
+
+  const toggleButton = screen.getByRole('button', { name: /abrir barra lateral/i });
+  fireEvent.click(toggleButton);
+
+  expect(screen.getByRole('button', { name: /cerrar barra lateral/i })).toBeInTheDocument();
 });
