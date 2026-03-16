@@ -122,6 +122,15 @@ body {
   font-weight: 600;
 }
 
+.search-input {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  margin-bottom: 14px;
+  font-size: 0.96rem;
+}
+
 .students-grid,
 .restaurants-grid {
   display: grid;
@@ -130,7 +139,8 @@ body {
 }
 
 .student-card,
-.restaurant-card {
+.restaurant-card,
+.detail-page {
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.1);
@@ -169,8 +179,40 @@ body {
   color: #6b7280;
 }
 
+.details-button,
+.back-button {
+  margin-top: 10px;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.details-button {
+  background: #2563eb;
+  color: #fff;
+}
+
+.back-button {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.detail-page {
+  margin-top: 6px;
+}
+
+.detail-image {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #e5e7eb;
+}
+
 .map-wrapper {
-  margin-top: 12px;
+  margin: 12px 0 14px;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
