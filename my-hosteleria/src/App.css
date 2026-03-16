@@ -1,38 +1,261 @@
-.App {
-  text-align: center;
+* {
+  box-sizing: border-box;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f5f6fa;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
+.app-layout {
   min-height: 100vh;
+  color: #1f2937;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: #111827;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.2);
+}
+
+.menu-toggle {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: #374151;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+}
+
+.menu-line {
+  width: 100%;
+  height: 2px;
+  background: #f9fafb;
+}
+
+.logo-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.brand-logo {
+  height: 42px;
+  width: auto;
+  object-fit: contain;
+}
+
+.sidebar {
+  position: fixed;
+  inset: 72px auto 0 0;
+  width: min(280px, 86vw);
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  transform: translateX(-105%);
+  transition: transform 0.25s ease;
+  z-index: 40;
+  padding: 24px 16px;
+}
+
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar nav {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.nav-link {
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  background: #f3f4f6;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 72px 0 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 35;
+}
+
+.main-content {
+  padding: 24px 16px 42px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.students-section {
+  margin-top: 12px;
+}
+
+.students-subtitle {
+  margin-top: -6px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+.search-input {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  margin-bottom: 14px;
+  font-size: 0.96rem;
+}
+
+.students-grid,
+.restaurants-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.student-card,
+.restaurant-card,
+.detail-page {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.1);
+  padding: 12px;
+}
+
+.student-card {
+  display: flex;
+  gap: 12px;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
 }
 
-.App-link {
-  color: #61dafb;
+.student-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e7eb;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+.student-card h3,
+.restaurant-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.student-card p,
+.restaurant-card p {
+  margin: 4px 0 0;
+  color: #4b5563;
+}
+
+.restaurant-card small {
+  display: block;
+  margin-top: 6px;
+  color: #6b7280;
+}
+
+.details-button,
+.back-button {
+  margin-top: 10px;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.details-button {
+  background: #2563eb;
+  color: #fff;
+}
+
+.back-button {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.detail-page {
+  margin-top: 6px;
+}
+
+.detail-image {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #e5e7eb;
+}
+
+.map-wrapper {
+  margin: 12px 0 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
+}
+
+.map-wrapper iframe {
+  width: 100%;
+  min-height: 360px;
+  border: 0;
+}
+
+@media (min-width: 768px) {
+  .app-header {
+    padding: 0 24px;
   }
-  to {
-    transform: rotate(360deg);
+
+  .main-content {
+    padding: 32px 24px 42px;
+  }
+
+  .students-grid,
+  .restaurants-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .menu-toggle {
+    display: none;
+  }
+
+  .sidebar {
+    transform: translateX(0);
+    width: 260px;
+  }
+
+  .sidebar-overlay {
+    display: none;
+  }
+
+  .main-content {
+    margin-left: 280px;
+    max-width: calc(980px + 280px);
   }
 }
