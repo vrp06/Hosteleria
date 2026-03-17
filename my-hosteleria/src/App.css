@@ -190,6 +190,30 @@ body {
   color: #6b7280;
 }
 
+.relation-text {
+  margin-top: 8px;
+  color: #1f2937;
+  font-size: 0.9rem;
+}
+
+.relation-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.link-button {
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #312e81;
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+
 .details-button,
 .back-button {
   margin-top: 10px;

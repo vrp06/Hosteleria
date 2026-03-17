@@ -3,60 +3,67 @@ import './App.css';
 
 const alumnesLocal = [
   {
-    id: 1,
+    id: '1',
     nom: 'Aina Martí',
     rol: 'Cap de sala',
     imatge:
       'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
     bio: 'Coordina el servei de sala i l atenció als clients durant el torn de pràctiques.',
+    restaurantsIds: ['1', '2'],
   },
   {
-    id: 2,
+    id: '2',
     nom: 'Nil Ferrer',
     rol: 'Cuiner de partida',
     imatge:
       'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80',
     bio: 'Especialitzat en partida de calents i control de temps de servei.',
+    restaurantsIds: ['1', '3'],
   },
   {
-    id: 3,
+    id: '3',
     nom: 'Júlia Casas',
     rol: 'Sommelier',
     imatge:
       'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=600&q=80',
     bio: 'Assessorament de maridatges i carta de vins per al restaurant escola.',
+    restaurantsIds: ['2'],
   },
   {
-    id: 4,
+    id: '4',
     nom: 'Pol Riera',
     rol: 'Responsable de reserves',
     imatge:
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
     bio: 'Gestió de reserves, assignació de taules i coordinació de flux de clients.',
+    restaurantsIds: ['1', '2', '3'],
   },
 ];
 
 const restaurantsLocal = [
   {
-    id: 1,
+    id: '1',
     nom: 'Restaurant Escola Joviat',
     especialitat: 'Cuina catalana i de temporada',
     adreca: 'Carrer de la Sardana, 24, Manresa',
     descripcio: 'Espai formatiu principal on es fan serveis reals amb alumnat.',
+    alumnesIds: ['1', '2', '4'],
   },
   {
-    id: 2,
+    id: '2',
     nom: 'Joviat Gastrobar',
     especialitat: 'Tapes creatives i menú degustació',
     adreca: 'Passeig de Pere III, 18, Manresa',
     descripcio: 'Format modern de sala per treballar tècniques de servei dinàmic.',
+    alumnesIds: ['1', '3', '4'],
   },
   {
-    id: 3,
+    id: '3',
     nom: 'Aula Restaurant Pràctiques',
     especialitat: 'Servei de sala i cuina d autor',
     adreca: 'Avinguda Bases de Manresa, 12, Manresa',
     descripcio: 'Entorn acadèmic per simulacions de servei i esdeveniments.',
+    alumnesIds: ['2', '4'],
   },
 ];
 
@@ -67,6 +74,7 @@ const navItems = [
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
+const firestoreArray = (field) => (field?.arrayValue?.values || []).map((value) => value.stringValue).filter(Boolean);
 
 const parseFirestoreDoc = (doc, index, kind) => {
   const fields = doc?.fields ?? {};
@@ -79,6 +87,7 @@ const parseFirestoreDoc = (doc, index, kind) => {
       rol: firestoreString(fields.rol) || 'Sense rol',
       imatge: firestoreString(fields.imatge) || firestoreString(fields.imagen) || 'https://via.placeholder.com/120',
       bio: firestoreString(fields.bio) || firestoreString(fields.descripcio) || 'Sense descripció',
+      restaurantsIds: firestoreArray(fields.restaurantsIds),
     };
   }
 
@@ -88,6 +97,7 @@ const parseFirestoreDoc = (doc, index, kind) => {
     especialitat: firestoreString(fields.especialitat) || 'Sense especialitat',
     adreca: firestoreString(fields.adreca) || firestoreString(fields.direccion) || 'Sense adreça',
     descripcio: firestoreString(fields.descripcio) || firestoreString(fields.descripcion) || 'Sense descripció',
+    alumnesIds: firestoreArray(fields.alumnesIds),
   };
 };
 
@@ -115,36 +125,23 @@ function App() {
 
   useEffect(() => {
     const loadFirebaseDataIfConfigExists = async () => {
-      if (typeof fetch !== 'function') {
-        return;
-      }
-
       try {
         const configResponse = await fetch('/firebase-connection.json', { cache: 'no-store' });
-        if (!configResponse.ok) {
-          return;
-        }
+        if (!configResponse.ok) return;
 
         const config = await configResponse.json();
-        const projectId = config.projectId;
-        const apiKey = config.apiKey;
+        if (!config.projectId || !config.apiKey) return;
 
-        if (!projectId || !apiKey) {
-          return;
-        }
-
+        const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
         const alumnesCollection = config.alumnesCollection || 'alumnes';
         const restaurantsCollection = config.restaurantsCollection || 'restaurants';
-        const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
 
         const [alumnesResponse, restaurantsResponse] = await Promise.all([
-          fetch(`${baseUrl}/${alumnesCollection}?key=${apiKey}`),
-          fetch(`${baseUrl}/${restaurantsCollection}?key=${apiKey}`),
+          fetch(`${baseUrl}/${alumnesCollection}?key=${config.apiKey}`),
+          fetch(`${baseUrl}/${restaurantsCollection}?key=${config.apiKey}`),
         ]);
 
-        if (!alumnesResponse.ok || !restaurantsResponse.ok) {
-          return;
-        }
+        if (!alumnesResponse.ok || !restaurantsResponse.ok) return;
 
         const alumnesPayload = await alumnesResponse.json();
         const restaurantsPayload = await restaurantsResponse.json();
@@ -156,18 +153,10 @@ function App() {
           parseFirestoreDoc(doc, index, 'restaurants')
         );
 
-        if (alumnesFirestore.length > 0) {
-          setAlumnes(alumnesFirestore);
-        }
-
-        if (restaurantsFirestore.length > 0) {
-          setRestaurants(restaurantsFirestore);
-        }
-
-        if (alumnesFirestore.length > 0 || restaurantsFirestore.length > 0) {
-          setDataSource('firebase');
-        }
-      } catch (error) {
+        if (alumnesFirestore.length) setAlumnes(alumnesFirestore);
+        if (restaurantsFirestore.length) setRestaurants(restaurantsFirestore);
+        if (alumnesFirestore.length || restaurantsFirestore.length) setDataSource('firebase');
+      } catch (_error) {
         console.info('No s ha pogut carregar Firebase, s utilitzen dades locals.');
       }
     };
@@ -175,28 +164,30 @@ function App() {
     loadFirebaseDataIfConfigExists();
   }, []);
 
+  const restaurantById = useMemo(
+    () => Object.fromEntries(restaurants.map((restaurant) => [String(restaurant.id), restaurant])),
+    [restaurants]
+  );
+
+  const alumneById = useMemo(
+    () => Object.fromEntries(alumnes.map((alumne) => [String(alumne.id), alumne])),
+    [alumnes]
+  );
+
   const goToPage = (page) => {
     setActivePage(page);
-    if (window.innerWidth < 1024) {
-      setIsSidebarOpen(false);
-    }
+    if (window.innerWidth < 1024) setIsSidebarOpen(false);
   };
 
   const filteredAlumnes = useMemo(() => {
     const term = searchAlumnes.trim().toLowerCase();
-    if (!term) {
-      return alumnes;
-    }
-    return alumnes.filter(
-      (alumne) => alumne.nom.toLowerCase().includes(term) || alumne.rol.toLowerCase().includes(term)
-    );
+    if (!term) return alumnes;
+    return alumnes.filter((alumne) => alumne.nom.toLowerCase().includes(term) || alumne.rol.toLowerCase().includes(term));
   }, [searchAlumnes, alumnes]);
 
   const filteredRestaurants = useMemo(() => {
     const term = searchRestaurants.trim().toLowerCase();
-    if (!term) {
-      return restaurants;
-    }
+    if (!term) return restaurants;
     return restaurants.filter(
       (restaurant) =>
         restaurant.nom.toLowerCase().includes(term) ||
@@ -230,12 +221,7 @@ function App() {
           <span className="menu-line" />
         </button>
 
-        <button
-          type="button"
-          className="logo-button"
-          aria-label="Ir al inicio"
-          onClick={() => goToPage('inici')}
-        >
+        <button type="button" className="logo-button" aria-label="Ir al inicio" onClick={() => goToPage('inici')}>
           <img src="/logo_joviat.webp" alt="Logo Joviat" className="brand-logo" />
         </button>
       </header>
@@ -256,12 +242,7 @@ function App() {
       </aside>
 
       {isSidebarOpen && (
-        <button
-          type="button"
-          className="sidebar-overlay"
-          aria-label="Cerrar barra lateral"
-          onClick={() => setIsSidebarOpen(false)}
-        />
+        <button type="button" className="sidebar-overlay" aria-label="Cerrar barra lateral" onClick={() => setIsSidebarOpen(false)} />
       )}
 
       <main className="main-content">
@@ -287,22 +268,27 @@ function App() {
               onChange={(event) => setSearchAlumnes(event.target.value)}
             />
             <div className="students-grid">
-              {filteredAlumnes.map((alumne) => (
-                <article className="student-card" key={alumne.id}>
-                  <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
-                  <div>
-                    <h3>{alumne.nom}</h3>
-                    <p>{alumne.rol}</p>
-                    <button
-                      type="button"
-                      className="details-button"
-                      onClick={() => openAlumneDetail(alumne)}
-                    >
-                      Ver detalles
-                    </button>
-                  </div>
-                </article>
-              ))}
+              {filteredAlumnes.map((alumne) => {
+                const relatedRestaurants = (alumne.restaurantsIds || [])
+                  .map((restaurantId) => restaurantById[String(restaurantId)])
+                  .filter(Boolean);
+
+                return (
+                  <article className="student-card" key={alumne.id}>
+                    <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
+                    <div>
+                      <h3>{alumne.nom}</h3>
+                      <p>{alumne.rol}</p>
+                      <p className="relation-text">
+                        Restaurants: {relatedRestaurants.length ? relatedRestaurants.map((r) => r.nom).join(', ') : 'Sense dades'}
+                      </p>
+                      <button type="button" className="details-button" onClick={() => openAlumneDetail(alumne)}>
+                        Ver detalles
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
         )}
@@ -318,6 +304,17 @@ function App() {
               <strong>Rol:</strong> {selectedAlumne.rol}
             </p>
             <p>{selectedAlumne.bio}</p>
+            <h3>Restaurants on treballa o ha treballat</h3>
+            <div className="relation-buttons">
+              {(selectedAlumne.restaurantsIds || [])
+                .map((restaurantId) => restaurantById[String(restaurantId)])
+                .filter(Boolean)
+                .map((restaurant) => (
+                  <button key={restaurant.id} type="button" className="link-button" onClick={() => openRestaurantDetail(restaurant)}>
+                    {restaurant.nom}
+                  </button>
+                ))}
+            </div>
           </section>
         )}
 
@@ -341,20 +338,25 @@ function App() {
               onChange={(event) => setSearchRestaurants(event.target.value)}
             />
             <div className="restaurants-grid">
-              {filteredRestaurants.map((restaurant) => (
-                <article className="restaurant-card" key={restaurant.id}>
-                  <h3>{restaurant.nom}</h3>
-                  <p>{restaurant.especialitat}</p>
-                  <small>{restaurant.adreca}</small>
-                  <button
-                    type="button"
-                    className="details-button"
-                    onClick={() => openRestaurantDetail(restaurant)}
-                  >
-                    Ver detalles
-                  </button>
-                </article>
-              ))}
+              {filteredRestaurants.map((restaurant) => {
+                const relatedAlumnes = (restaurant.alumnesIds || [])
+                  .map((alumneId) => alumneById[String(alumneId)])
+                  .filter(Boolean);
+
+                return (
+                  <article className="restaurant-card" key={restaurant.id}>
+                    <h3>{restaurant.nom}</h3>
+                    <p>{restaurant.especialitat}</p>
+                    <small>{restaurant.adreca}</small>
+                    <p className="relation-text">
+                      Alumnes: {relatedAlumnes.length ? relatedAlumnes.map((a) => a.nom).join(', ') : 'Sense dades'}
+                    </p>
+                    <button type="button" className="details-button" onClick={() => openRestaurantDetail(restaurant)}>
+                      Ver detalles
+                    </button>
+                  </article>
+                );
+              })}
             </div>
           </section>
         )}
@@ -372,6 +374,17 @@ function App() {
               <strong>Adreça:</strong> {selectedRestaurant.adreca}
             </p>
             <p>{selectedRestaurant.descripcio}</p>
+            <h3>Alumnes que hi treballen o han treballat</h3>
+            <div className="relation-buttons">
+              {(selectedRestaurant.alumnesIds || [])
+                .map((alumneId) => alumneById[String(alumneId)])
+                .filter(Boolean)
+                .map((alumne) => (
+                  <button key={alumne.id} type="button" className="link-button" onClick={() => openAlumneDetail(alumne)}>
+                    {alumne.nom}
+                  </button>
+                ))}
+            </div>
           </section>
         )}
       </main>
