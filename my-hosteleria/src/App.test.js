@@ -4,6 +4,8 @@ import App from './App';
 test('filters students and opens student detail page', () => {
   render(<App />);
 
+  expect(screen.getByText(/font de dades: local/i)).toBeInTheDocument();
+
   fireEvent.click(screen.getByRole('button', { name: /visualitzar alumnes/i }));
   expect(screen.getByRole('heading', { name: /visualitzar alumnes/i })).toBeInTheDocument();
 

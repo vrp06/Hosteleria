@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
-const alumnesFirebase = [
+const alumnesLocal = [
   {
     id: 1,
     nom: 'Aina Martí',
@@ -36,7 +36,7 @@ const alumnesFirebase = [
   },
 ];
 
-const restaurants = [
+const restaurantsLocal = [
   {
     id: 1,
     nom: 'Restaurant Escola Joviat',
@@ -66,6 +66,31 @@ const navItems = [
   { key: 'restaurants', label: 'Restaurants' },
 ];
 
+const firestoreString = (field) => field?.stringValue ?? '';
+
+const parseFirestoreDoc = (doc, index, kind) => {
+  const fields = doc?.fields ?? {};
+  const id = doc?.name?.split('/').pop() || `doc-${index}`;
+
+  if (kind === 'alumnes') {
+    return {
+      id,
+      nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Alumne ${index + 1}`,
+      rol: firestoreString(fields.rol) || 'Sense rol',
+      imatge: firestoreString(fields.imatge) || firestoreString(fields.imagen) || 'https://via.placeholder.com/120',
+      bio: firestoreString(fields.bio) || firestoreString(fields.descripcio) || 'Sense descripció',
+    };
+  }
+
+  return {
+    id,
+    nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Restaurant ${index + 1}`,
+    especialitat: firestoreString(fields.especialitat) || 'Sense especialitat',
+    adreca: firestoreString(fields.adreca) || firestoreString(fields.direccion) || 'Sense adreça',
+    descripcio: firestoreString(fields.descripcio) || firestoreString(fields.descripcion) || 'Sense descripció',
+  };
+};
+
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('inici');
@@ -73,6 +98,9 @@ function App() {
   const [searchRestaurants, setSearchRestaurants] = useState('');
   const [selectedAlumne, setSelectedAlumne] = useState(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+  const [alumnes, setAlumnes] = useState(alumnesLocal);
+  const [restaurants, setRestaurants] = useState(restaurantsLocal);
+  const [dataSource, setDataSource] = useState('local');
 
   useEffect(() => {
     const closeOnResize = () => {
@@ -85,6 +113,68 @@ function App() {
     return () => window.removeEventListener('resize', closeOnResize);
   }, []);
 
+  useEffect(() => {
+    const loadFirebaseDataIfConfigExists = async () => {
+      if (typeof fetch !== 'function') {
+        return;
+      }
+
+      try {
+        const configResponse = await fetch('/firebase-connection.json', { cache: 'no-store' });
+        if (!configResponse.ok) {
+          return;
+        }
+
+        const config = await configResponse.json();
+        const projectId = config.projectId;
+        const apiKey = config.apiKey;
+
+        if (!projectId || !apiKey) {
+          return;
+        }
+
+        const alumnesCollection = config.alumnesCollection || 'alumnes';
+        const restaurantsCollection = config.restaurantsCollection || 'restaurants';
+        const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+
+        const [alumnesResponse, restaurantsResponse] = await Promise.all([
+          fetch(`${baseUrl}/${alumnesCollection}?key=${apiKey}`),
+          fetch(`${baseUrl}/${restaurantsCollection}?key=${apiKey}`),
+        ]);
+
+        if (!alumnesResponse.ok || !restaurantsResponse.ok) {
+          return;
+        }
+
+        const alumnesPayload = await alumnesResponse.json();
+        const restaurantsPayload = await restaurantsResponse.json();
+
+        const alumnesFirestore = (alumnesPayload.documents || []).map((doc, index) =>
+          parseFirestoreDoc(doc, index, 'alumnes')
+        );
+        const restaurantsFirestore = (restaurantsPayload.documents || []).map((doc, index) =>
+          parseFirestoreDoc(doc, index, 'restaurants')
+        );
+
+        if (alumnesFirestore.length > 0) {
+          setAlumnes(alumnesFirestore);
+        }
+
+        if (restaurantsFirestore.length > 0) {
+          setRestaurants(restaurantsFirestore);
+        }
+
+        if (alumnesFirestore.length > 0 || restaurantsFirestore.length > 0) {
+          setDataSource('firebase');
+        }
+      } catch (error) {
+        console.info('No s ha pogut carregar Firebase, s utilitzen dades locals.');
+      }
+    };
+
+    loadFirebaseDataIfConfigExists();
+  }, []);
+
   const goToPage = (page) => {
     setActivePage(page);
     if (window.innerWidth < 1024) {
@@ -95,12 +185,12 @@ function App() {
   const filteredAlumnes = useMemo(() => {
     const term = searchAlumnes.trim().toLowerCase();
     if (!term) {
-      return alumnesFirebase;
+      return alumnes;
     }
-    return alumnesFirebase.filter(
+    return alumnes.filter(
       (alumne) => alumne.nom.toLowerCase().includes(term) || alumne.rol.toLowerCase().includes(term)
     );
-  }, [searchAlumnes]);
+  }, [searchAlumnes, alumnes]);
 
   const filteredRestaurants = useMemo(() => {
     const term = searchRestaurants.trim().toLowerCase();
@@ -113,7 +203,7 @@ function App() {
         restaurant.especialitat.toLowerCase().includes(term) ||
         restaurant.adreca.toLowerCase().includes(term)
     );
-  }, [searchRestaurants]);
+  }, [searchRestaurants, restaurants]);
 
   const openAlumneDetail = (alumne) => {
     setSelectedAlumne(alumne);
@@ -175,6 +265,8 @@ function App() {
       )}
 
       <main className="main-content">
+        <p className="data-source">Font de dades: {dataSource === 'firebase' ? 'Firebase' : 'Local'}</p>
+
         {activePage === 'inici' && (
           <section>
             <h1>Benvinguts a Hostaleria Joviat</h1>
