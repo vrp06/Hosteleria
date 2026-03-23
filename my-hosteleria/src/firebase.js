@@ -1,21 +1,42 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp, getApps, getApp } from 'firebase/app';
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBpx_szcDUPmXWI_zHL3JuPQSBEiUC7K8E",
-  authDomain: "reacthosteleriajoviat-26273.firebaseapp.com",
-  projectId: "reacthosteleriajoviat-26273",
-  storageBucket: "reacthosteleriajoviat-26273.firebasestorage.app",
-  messagingSenderId: "29602822309",
-  appId: "1:29602822309:web:bb5dc73d5ca0eb0d75f54c",
-  measurementId: "G-NJK9C1B82V"
+const rawFirebaseConfig = {
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'AIzaSyBpx_szcDUPmXWI_zHL3JuPQSBEiUC7K8E',
+  authDomain:
+    process.env.REACT_APP_FIREBASE_AUTH_DOMAIN ||
+    'reacthosteleriajoviat-26273.firebaseapp.com',
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || 'reacthosteleriajoviat-26273',
+  storageBucket:
+    process.env.REACT_APP_FIREBASE_STORAGE_BUCKET ||
+    'reacthosteleriajoviat-26273.firebasestorage.app',
+  messagingSenderId:
+    process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '29602822309',
+  appId:
+    process.env.REACT_APP_FIREBASE_APP_ID || '1:29602822309:web:bb5dc73d5ca0eb0d75f54c',
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || 'G-NJK9C1B82V',
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const collectionConfig = {
+  alumnesCollection: process.env.REACT_APP_FIREBASE_ALUMNES_COLLECTION || 'alumnes',
+  restaurantsCollection: process.env.REACT_APP_FIREBASE_RESTAURANTS_COLLECTION || 'restaurants',
+};
+
+const requiredConfigKeys = ['apiKey', 'authDomain', 'projectId', 'appId'];
+
+export const hasFirebaseConfig = requiredConfigKeys.every(
+  (key) => typeof rawFirebaseConfig[key] === 'string' && rawFirebaseConfig[key].trim() !== ''
+);
+
+const firebaseApp = hasFirebaseConfig
+  ? getApps().length > 0
+    ? getApp()
+    : initializeApp(rawFirebaseConfig)
+  : null;
+
+export const app = firebaseApp;
+export const getFirebaseConfig = () => ({
+  ...rawFirebaseConfig,
+  ...collectionConfig,
+});
+
+export default firebaseApp;
