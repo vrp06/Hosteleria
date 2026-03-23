@@ -17,8 +17,11 @@ const rawFirebaseConfig = {
 };
 
 const collectionConfig = {
-  alumnesCollection: process.env.REACT_APP_FIREBASE_ALUMNES_COLLECTION || 'alumnes',
-  restaurantsCollection: process.env.REACT_APP_FIREBASE_RESTAURANTS_COLLECTION || 'restaurants',
+  administratorCollection:
+    process.env.REACT_APP_FIREBASE_ADMINISTRATOR_COLLECTION || 'Administrator',
+  alumniCollection: process.env.REACT_APP_FIREBASE_ALUMNI_COLLECTION || 'Alumni',
+  restAlumCollection: process.env.REACT_APP_FIREBASE_REST_ALUM_COLLECTION || 'Rest-Alum',
+  restaurantCollection: process.env.REACT_APP_FIREBASE_RESTAURANT_COLLECTION || 'Restaurant',
 };
 
 const requiredConfigKeys = ['apiKey', 'authDomain', 'projectId', 'appId'];

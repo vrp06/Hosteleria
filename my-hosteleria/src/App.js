@@ -9,41 +9,88 @@ const baseNavItems = [
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
-const firestoreArray = (field) =>
-  (field?.arrayValue?.values || []).map((value) => value.stringValue).filter(Boolean);
+const firestoreBoolean = (field) => field?.booleanValue ?? false;
+const firestoreGeoPoint = (field) => field?.geoPointValue ?? null;
+const firestoreReferenceId = (field) => field?.referenceValue?.split('/').pop() ?? '';
 
-const parseFirestoreDoc = (doc, index, kind) => {
+const parseAlumniDoc = (doc, index) => {
   const fields = doc?.fields ?? {};
-  const id = doc?.name?.split('/').pop() || `doc-${index}`;
-
-  if (kind === 'alumnes') {
-    return {
-      id,
-      nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Alumne ${index + 1}`,
-      rol: firestoreString(fields.rol) || 'Sense rol',
-      imatge:
-        firestoreString(fields.imatge) ||
-        firestoreString(fields.imagen) ||
-        'https://via.placeholder.com/120',
-      bio:
-        firestoreString(fields.bio) ||
-        firestoreString(fields.descripcio) ||
-        firestoreString(fields.descripcion) ||
-        'Sense descripció',
-      restaurantsIds: firestoreArray(fields.restaurantsIds),
-    };
-  }
+  const id = doc?.name?.split('/').pop() || `alumni-${index}`;
 
   return {
     id,
-    nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Restaurant ${index + 1}`,
-    especialitat: firestoreString(fields.especialitat) || 'Sense especialitat',
-    adreca: firestoreString(fields.adreca) || firestoreString(fields.direccion) || 'Sense adreça',
-    descripcio:
-      firestoreString(fields.descripcio) ||
-      firestoreString(fields.descripcion) ||
-      'Sense descripció',
-    alumnesIds: firestoreArray(fields.alumnesIds),
+    nom: firestoreString(fields.Name) || `Alumni ${index + 1}`,
+    rol: firestoreString(fields.Status) || 'Sense estat',
+    status: firestoreString(fields.Status) || 'Sense estat',
+    imatge: firestoreString(fields.PhotoURL) || 'https://via.placeholder.com/120',
+    email: firestoreString(fields.email),
+    restaurantsIds: [],
+    restaurantRoles: [],
+  };
+};
+
+const parseRestaurantDoc = (doc, index) => {
+  const fields = doc?.fields ?? {};
+  const id = doc?.name?.split('/').pop() || `restaurant-${index}`;
+  const location = firestoreGeoPoint(fields.location);
+
+  return {
+    id,
+    nom: firestoreString(fields.name) || `Restaurant ${index + 1}`,
+    adreca: firestoreString(fields.Address) || 'Sense adreça',
+    imatge: firestoreString(fields.PhotoURL) || 'https://via.placeholder.com/320x180',
+    ubicacio: location,
+    alumnesIds: [],
+    alumnesRoles: [],
+  };
+};
+
+const parseRelationDoc = (doc, index) => {
+  const fields = doc?.fields ?? {};
+
+  return {
+    id: doc?.name?.split('/').pop() || `relation-${index}`,
+    alumniId: firestoreReferenceId(fields.id_alumni),
+    restaurantId: firestoreReferenceId(fields.id_restaurant),
+    rol: firestoreString(fields.rol) || 'Sense rol',
+    currentJob: firestoreBoolean(fields.current_job),
+  };
+};
+
+const parseAdministratorDoc = (doc) => {
+  const fields = doc?.fields ?? {};
+  return firestoreString(fields.Email).trim().toLowerCase();
+};
+
+const buildLinkedData = (alumniDocs, restaurantDocs, relationDocs) => {
+  const alumniMap = new Map(alumniDocs.map((alumni) => [alumni.id, { ...alumni }]));
+  const restaurantMap = new Map(restaurantDocs.map((restaurant) => [restaurant.id, { ...restaurant }]));
+
+  relationDocs.forEach((relation) => {
+    const alumni = alumniMap.get(relation.alumniId);
+    const restaurant = restaurantMap.get(relation.restaurantId);
+
+    if (!alumni || !restaurant) {
+      return;
+    }
+
+    if (!alumni.restaurantsIds.includes(restaurant.id)) {
+      alumni.restaurantsIds.push(restaurant.id);
+    }
+
+    if (!restaurant.alumnesIds.includes(alumni.id)) {
+      restaurant.alumnesIds.push(alumni.id);
+    }
+
+    if (relation.currentJob) {
+      alumni.restaurantRoles.push({ restaurantId: restaurant.id, rol: relation.rol });
+      restaurant.alumnesRoles.push({ alumneId: alumni.id, rol: relation.rol });
+    }
+  });
+
+  return {
+    alumnes: Array.from(alumniMap.values()),
+    restaurants: Array.from(restaurantMap.values()),
   };
 };
 
@@ -63,12 +110,11 @@ function App() {
   const [pageHistory, setPageHistory] = useState([]);
   const [alumnes, setAlumnes] = useState([]);
   const [restaurants, setRestaurants] = useState([]);
-  const [dataSource, setDataSource] = useState('firebase');
   const [dataError, setDataError] = useState('');
   const [dataLoading, setDataLoading] = useState(true);
   const [authUser, setAuthUser] = useState(null);
+  const [adminEmails, setAdminEmails] = useState([]);
   const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
@@ -88,7 +134,7 @@ function App() {
       if (!hasFirebaseConfig || typeof fetch !== 'function') {
         setAlumnes([]);
         setRestaurants([]);
-        setDataSource('firebase');
+        setAdminEmails([]);
         setDataError('Error de conexión con el servidor');
         setDataLoading(false);
         return;
@@ -101,36 +147,48 @@ function App() {
         const config = getFirebaseConfig();
         const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
 
-        const [alumnesResponse, restaurantsResponse] = await Promise.all([
-          fetch(`${baseUrl}/${config.alumnesCollection}?key=${config.apiKey}`),
-          fetch(`${baseUrl}/${config.restaurantsCollection}?key=${config.apiKey}`),
+        const [alumniResponse, restaurantResponse, relationResponse, administratorResponse] = await Promise.all([
+          fetch(`${baseUrl}/${config.alumniCollection}?key=${config.apiKey}`),
+          fetch(`${baseUrl}/${config.restaurantCollection}?key=${config.apiKey}`),
+          fetch(`${baseUrl}/${config.restAlumCollection}?key=${config.apiKey}`),
+          fetch(`${baseUrl}/${config.administratorCollection}?key=${config.apiKey}`),
         ]);
 
-        if (!alumnesResponse.ok || !restaurantsResponse.ok) {
+        if (
+          !alumniResponse.ok ||
+          !restaurantResponse.ok ||
+          !relationResponse.ok ||
+          !administratorResponse.ok
+        ) {
           throw new Error('firebase-response-error');
         }
 
-        const alumnesPayload = await alumnesResponse.json();
-        const restaurantsPayload = await restaurantsResponse.json();
+        const [alumniPayload, restaurantPayload, relationPayload, administratorPayload] =
+          await Promise.all([
+            alumniResponse.json(),
+            restaurantResponse.json(),
+            relationResponse.json(),
+            administratorResponse.json(),
+          ]);
 
-        const alumnesFirestore = (alumnesPayload.documents || []).map((doc, index) =>
-          parseFirestoreDoc(doc, index, 'alumnes')
-        );
-        const restaurantsFirestore = (restaurantsPayload.documents || []).map((doc, index) =>
-          parseFirestoreDoc(doc, index, 'restaurants')
-        );
+        const alumniDocs = (alumniPayload.documents || []).map(parseAlumniDoc);
+        const restaurantDocs = (restaurantPayload.documents || []).map(parseRestaurantDoc);
+        const relationDocs = (relationPayload.documents || []).map(parseRelationDoc);
+        const administratorDocs = (administratorPayload.documents || []).map(parseAdministratorDoc);
 
-        if (alumnesFirestore.length === 0 && restaurantsFirestore.length === 0) {
+        const linkedData = buildLinkedData(alumniDocs, restaurantDocs, relationDocs);
+
+        if (linkedData.alumnes.length === 0 && linkedData.restaurants.length === 0) {
           throw new Error('firebase-empty-data');
         }
 
-        setAlumnes(alumnesFirestore);
-        setRestaurants(restaurantsFirestore);
-        setDataSource('firebase');
+        setAlumnes(linkedData.alumnes);
+        setRestaurants(linkedData.restaurants);
+        setAdminEmails(administratorDocs.filter(Boolean));
       } catch (_error) {
         setAlumnes([]);
         setRestaurants([]);
-        setDataSource('firebase');
+        setAdminEmails([]);
         setDataError('Error de conexión con el servidor');
       } finally {
         setDataLoading(false);
@@ -166,7 +224,6 @@ function App() {
   const goToPage = (page) => {
     if (page === 'logout') {
       setAuthUser(null);
-      setLoginPassword('');
       setLoginError('');
       setActivePage('inici');
       setPageHistory([]);
@@ -223,7 +280,9 @@ function App() {
 
     return alumnes.filter(
       (alumne) =>
-        alumne.nom.toLowerCase().includes(term) || alumne.rol.toLowerCase().includes(term)
+        alumne.nom.toLowerCase().includes(term) ||
+        alumne.rol.toLowerCase().includes(term) ||
+        alumne.email.toLowerCase().includes(term)
     );
   }, [alumnes, searchAlumnes]);
 
@@ -235,9 +294,7 @@ function App() {
 
     return restaurants.filter(
       (restaurant) =>
-        restaurant.nom.toLowerCase().includes(term) ||
-        restaurant.especialitat.toLowerCase().includes(term) ||
-        restaurant.adreca.toLowerCase().includes(term)
+        restaurant.nom.toLowerCase().includes(term) || restaurant.adreca.toLowerCase().includes(term)
     );
   }, [restaurants, searchRestaurants]);
 
@@ -250,34 +307,24 @@ function App() {
       return;
     }
 
+    const normalizedEmail = loginEmail.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setLoginError('Introduce un email de administrador');
+      return;
+    }
+
     setLoginLoading(true);
 
     try {
-      const { apiKey } = getFirebaseConfig();
-      const response = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: loginEmail,
-            password: loginPassword,
-            returnSecureToken: true,
-          }),
-        }
-      );
-
-      const payload = await response.json();
-      if (!response.ok) {
-        setLoginError(payload.error?.message || 'No s ha pogut iniciar sessió');
+      if (!adminEmails.includes(normalizedEmail)) {
+        setLoginError('El email no existe en la colección Administrator');
         return;
       }
 
-      setAuthUser({ email: payload.email, idToken: payload.idToken, localId: payload.localId });
-      setLoginPassword('');
+      setAuthUser({ email: normalizedEmail });
       setActivePage('inici');
     } catch (_error) {
-      setLoginError('Error de xarxa en iniciar sessió amb Firebase');
+      setLoginError('Error de conexión con el servidor');
     } finally {
       setLoginLoading(false);
     }
@@ -351,16 +398,16 @@ function App() {
         {activePage === 'inici' && (
           <section>
             <h1>Benvinguts a Hostaleria Joviat</h1>
-            <p>Header responsive amb sidebar fixa en PC i desplegable en mòbil.</p>
+            <p>Dades carregades des de les col·leccions Alumni, Restaurant i Rest-Alum.</p>
           </section>
         )}
 
         {activePage === 'login' && (
           <section className="detail-page login-panel">
-            <h2>Login</h2>
+            <h2>Login administrador</h2>
             <form className="login-form" onSubmit={handleLogin}>
               <label>
-                Email
+                Email administrador
                 <input
                   type="email"
                   className="search-input"
@@ -368,18 +415,9 @@ function App() {
                   onChange={(event) => setLoginEmail(event.target.value)}
                 />
               </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  className="search-input"
-                  value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                />
-              </label>
               {loginError && <p className="login-error">{loginError}</p>}
               <button type="submit" className="details-button" disabled={loginLoading}>
-                {loginLoading ? 'Iniciant sessió...' : 'Entrar'}
+                {loginLoading ? 'Comprovant accés...' : 'Entrar'}
               </button>
             </form>
           </section>
@@ -388,11 +426,11 @@ function App() {
         {activePage === 'alumnes' && (
           <section className="students-section">
             <h2>Visualitzar Alumnes</h2>
-            <p className="students-subtitle">Llistat d'alumnes des de Firebase</p>
+            <p className="students-subtitle">Llistat d'alumnes des de la col·lecció Alumni</p>
             <input
               type="search"
               className="search-input"
-              placeholder="Buscar alumne o rol"
+              placeholder="Buscar alumne, estat o email"
               aria-label="Buscar alumnes"
               value={searchAlumnes}
               onChange={(event) => setSearchAlumnes(event.target.value)}
@@ -411,7 +449,8 @@ function App() {
                       <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
                       <div>
                         <h3>{alumne.nom}</h3>
-                        <p>{alumne.rol}</p>
+                        <p>{alumne.status}</p>
+                        <p>{alumne.email || 'Sense email'}</p>
                         <p className="relation-text">
                           Restaurants:{' '}
                           {relatedRestaurants.length
@@ -442,10 +481,12 @@ function App() {
             <h2>{selectedAlumne.nom}</h2>
             <img src={selectedAlumne.imatge} alt={selectedAlumne.nom} className="detail-image" />
             <p>
-              <strong>Rol:</strong> {selectedAlumne.rol}
+              <strong>Status:</strong> {selectedAlumne.status}
             </p>
-            <p>{selectedAlumne.bio}</p>
-            <h3>Restaurants on treballa o ha treballat</h3>
+            <p>
+              <strong>Email:</strong> {selectedAlumne.email || 'Sense email'}
+            </p>
+            <h3>Restaurants vinculats</h3>
             <div className="relation-buttons">
               {(selectedAlumne.restaurantsIds || [])
                 .map((restaurantId) => restaurantById[String(restaurantId)])
@@ -478,7 +519,7 @@ function App() {
             <input
               type="search"
               className="search-input"
-              placeholder="Buscar restaurant, especialitat o adreça"
+              placeholder="Buscar restaurant o adreça"
               aria-label="Buscar restaurants"
               value={searchRestaurants}
               onChange={(event) => setSearchRestaurants(event.target.value)}
@@ -494,9 +535,9 @@ function App() {
 
                   return (
                     <article className="restaurant-card" key={restaurant.id}>
+                      <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
                       <h3>{restaurant.nom}</h3>
-                      <p>{restaurant.especialitat}</p>
-                      <small>{restaurant.adreca}</small>
+                      <p>{restaurant.adreca}</p>
                       <p className="relation-text">
                         Alumnes:{' '}
                         {relatedAlumnes.length
@@ -524,14 +565,21 @@ function App() {
               ← Retroceder
             </button>
             <h2>{selectedRestaurant.nom}</h2>
-            <p>
-              <strong>Especialitat:</strong> {selectedRestaurant.especialitat}
-            </p>
+            <img
+              src={selectedRestaurant.imatge}
+              alt={selectedRestaurant.nom}
+              className="detail-image"
+            />
             <p>
               <strong>Adreça:</strong> {selectedRestaurant.adreca}
             </p>
-            <p>{selectedRestaurant.descripcio}</p>
-            <h3>Alumnes que hi treballen o han treballat</h3>
+            {selectedRestaurant.ubicacio && (
+              <p>
+                <strong>Ubicació:</strong> {selectedRestaurant.ubicacio.latitude},{' '}
+                {selectedRestaurant.ubicacio.longitude}
+              </p>
+            )}
+            <h3>Alumnes vinculats</h3>
             <div className="relation-buttons">
               {(selectedRestaurant.alumnesIds || [])
                 .map((alumneId) => alumneById[String(alumneId)])

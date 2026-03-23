@@ -3,41 +3,58 @@ import App from './App';
 
 let mockFirebaseEnabled = false;
 
-const alumnesPayload = {
+const alumniPayload = {
   documents: [
     {
-      name: 'projects/test-project/databases/(default)/documents/alumnes/1',
+      name: 'projects/test-project/databases/(default)/documents/Alumni/alumni-1',
       fields: {
-        nom: { stringValue: 'Aina Martí' },
-        rol: { stringValue: 'Cap de sala' },
-        imatge: { stringValue: 'https://example.com/aina.jpg' },
-        bio: { stringValue: 'Coordina el servei de sala.' },
-        restaurantsIds: { arrayValue: { values: [{ stringValue: '1' }, { stringValue: '2' }] } },
+        Name: { stringValue: 'Aina Martí' },
+        PhotoURL: { stringValue: 'https://example.com/aina.jpg' },
+        Status: { stringValue: 'Disponible' },
+        email: { stringValue: 'aina@test.com' },
       },
     },
   ],
 };
 
-const restaurantsPayload = {
+const restaurantPayload = {
   documents: [
     {
-      name: 'projects/test-project/databases/(default)/documents/restaurants/1',
+      name: 'projects/test-project/databases/(default)/documents/Restaurant/rest-1',
       fields: {
-        nom: { stringValue: 'Restaurant Escola Joviat' },
-        especialitat: { stringValue: 'Cuina catalana' },
-        adreca: { stringValue: 'Manresa' },
-        descripcio: { stringValue: 'Espai formatiu principal.' },
-        alumnesIds: { arrayValue: { values: [{ stringValue: '1' }] } },
+        name: { stringValue: 'Restaurant Escola Joviat' },
+        Address: { stringValue: 'Manresa' },
+        PhotoURL: { stringValue: 'https://example.com/restaurant.jpg' },
+        location: { geoPointValue: { latitude: 41.72, longitude: 1.82 } },
       },
     },
+  ],
+};
+
+const relationPayload = {
+  documents: [
     {
-      name: 'projects/test-project/databases/(default)/documents/restaurants/2',
+      name: 'projects/test-project/databases/(default)/documents/Rest-Alum/relation-1',
       fields: {
-        nom: { stringValue: 'Joviat Gastrobar' },
-        especialitat: { stringValue: 'Tapes creatives' },
-        adreca: { stringValue: 'Manresa Centre' },
-        descripcio: { stringValue: 'Restaurant de pràctiques.' },
-        alumnesIds: { arrayValue: { values: [{ stringValue: '1' }] } },
+        current_job: { booleanValue: true },
+        id_alumni: {
+          referenceValue: 'projects/test-project/databases/(default)/documents/Alumni/alumni-1',
+        },
+        id_restaurant: {
+          referenceValue: 'projects/test-project/databases/(default)/documents/Restaurant/rest-1',
+        },
+        rol: { stringValue: 'Cap de sala' },
+      },
+    },
+  ],
+};
+
+const administratorPayload = {
+  documents: [
+    {
+      name: 'projects/test-project/databases/(default)/documents/Administrator/admin-1',
+      fields: {
+        Email: { stringValue: 'admin@test.com' },
       },
     },
   ],
@@ -47,8 +64,10 @@ jest.mock('./firebase', () => ({
   getFirebaseConfig: () => ({
     apiKey: 'test-api-key',
     projectId: 'test-project',
-    alumnesCollection: 'alumnes',
-    restaurantsCollection: 'restaurants',
+    administratorCollection: 'Administrator',
+    alumniCollection: 'Alumni',
+    restAlumCollection: 'Rest-Alum',
+    restaurantCollection: 'Restaurant',
   }),
   get hasFirebaseConfig() {
     return mockFirebaseEnabled;
@@ -60,19 +79,30 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test('students and restaurants are loaded from firebase and keep bidirectional relation navigation', async () => {
-  mockFirebaseEnabled = true;
+const mockFirebaseFetch = () =>
   jest.spyOn(global, 'fetch').mockImplementation((url) => {
-    if (String(url).includes('/alumnes?')) {
-      return Promise.resolve({ ok: true, json: async () => alumnesPayload });
+    if (String(url).includes('/Alumni?')) {
+      return Promise.resolve({ ok: true, json: async () => alumniPayload });
     }
 
-    if (String(url).includes('/restaurants?')) {
-      return Promise.resolve({ ok: true, json: async () => restaurantsPayload });
+    if (String(url).includes('/Restaurant?')) {
+      return Promise.resolve({ ok: true, json: async () => restaurantPayload });
+    }
+
+    if (String(url).includes('/Rest-Alum?')) {
+      return Promise.resolve({ ok: true, json: async () => relationPayload });
+    }
+
+    if (String(url).includes('/Administrator?')) {
+      return Promise.resolve({ ok: true, json: async () => administratorPayload });
     }
 
     return Promise.resolve({ ok: false, json: async () => ({}) });
   });
+
+test('students and restaurants are loaded from firebase and keep bidirectional relation navigation', async () => {
+  mockFirebaseEnabled = true;
+  mockFirebaseFetch();
 
   render(<App />);
 
@@ -97,13 +127,9 @@ test('students and restaurants are loaded from firebase and keep bidirectional r
 
 test('shows server connection error when firebase returns no data', async () => {
   mockFirebaseEnabled = true;
-  jest.spyOn(global, 'fetch').mockImplementation((url) => {
-    if (String(url).includes('/alumnes?') || String(url).includes('/restaurants?')) {
-      return Promise.resolve({ ok: true, json: async () => ({ documents: [] }) });
-    }
-
-    return Promise.resolve({ ok: false, json: async () => ({}) });
-  });
+  jest.spyOn(global, 'fetch').mockImplementation(() =>
+    Promise.resolve({ ok: true, json: async () => ({ documents: [] }) })
+  );
 
   render(<App />);
 
@@ -112,30 +138,9 @@ test('shows server connection error when firebase returns no data', async () => 
   });
 });
 
-test('login tab renders and can switch to logout when firebase auth succeeds', async () => {
+test('login tab renders and can switch to logout when administrator email exists', async () => {
   mockFirebaseEnabled = true;
-  jest.spyOn(global, 'fetch').mockImplementation((url) => {
-    if (String(url).includes('/alumnes?')) {
-      return Promise.resolve({ ok: true, json: async () => alumnesPayload });
-    }
-
-    if (String(url).includes('/restaurants?')) {
-      return Promise.resolve({ ok: true, json: async () => restaurantsPayload });
-    }
-
-    if (String(url).includes('identitytoolkit')) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          email: 'demo@test.com',
-          idToken: 'token',
-          localId: 'uid-1',
-        }),
-      });
-    }
-
-    return Promise.resolve({ ok: false, json: async () => ({}) });
-  });
+  mockFirebaseFetch();
 
   render(<App />);
 
@@ -144,8 +149,9 @@ test('login tab renders and can switch to logout when firebase auth succeeds', a
   });
 
   fireEvent.click(screen.getByRole('button', { name: /login/i }));
-  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'demo@test.com' } });
-  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: '123456' } });
+  fireEvent.change(screen.getByLabelText(/email administrador/i), {
+    target: { value: 'admin@test.com' },
+  });
   fireEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
   await waitFor(() => {
@@ -155,17 +161,7 @@ test('login tab renders and can switch to logout when firebase auth succeeds', a
 
 test('logo uses logo_joviat.webp and mobile menu opens sidebar', async () => {
   mockFirebaseEnabled = true;
-  jest.spyOn(global, 'fetch').mockImplementation((url) => {
-    if (String(url).includes('/alumnes?')) {
-      return Promise.resolve({ ok: true, json: async () => alumnesPayload });
-    }
-
-    if (String(url).includes('/restaurants?')) {
-      return Promise.resolve({ ok: true, json: async () => restaurantsPayload });
-    }
-
-    return Promise.resolve({ ok: false, json: async () => ({}) });
-  });
+  mockFirebaseFetch();
 
   render(<App />);
 
