@@ -1,11 +1,21 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || '',
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || '',
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || '',
-  alumnesCollection: process.env.REACT_APP_FIREBASE_ALUMNES_COLLECTION || 'alumnes',
-  restaurantsCollection: process.env.REACT_APP_FIREBASE_RESTAURANTS_COLLECTION || 'restaurants',
+  apiKey: "AIzaSyBpx_szcDUPmXWI_zHL3JuPQSBEiUC7K8E",
+  authDomain: "reacthosteleriajoviat-26273.firebaseapp.com",
+  projectId: "reacthosteleriajoviat-26273",
+  storageBucket: "reacthosteleriajoviat-26273.firebasestorage.app",
+  messagingSenderId: "29602822309",
+  appId: "1:29602822309:web:bb5dc73d5ca0eb0d75f54c",
+  measurementId: "G-NJK9C1B82V"
 };
 
-export const hasFirebaseConfig = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
-
-export const getFirebaseConfig = () => firebaseConfig;
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
