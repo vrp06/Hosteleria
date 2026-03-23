@@ -2,72 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
 
-const alumnesLocal = [
-  {
-    id: '1',
-    nom: 'Aina Martí',
-    rol: 'Cap de sala',
-    imatge:
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
-    bio: 'Coordina el servei de sala i l atenció als clients durant el torn de pràctiques.',
-    restaurantsIds: ['1', '2'],
-  },
-  {
-    id: '2',
-    nom: 'Nil Ferrer',
-    rol: 'Cuiner de partida',
-    imatge:
-      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80',
-    bio: 'Especialitzat en partida de calents i control de temps de servei.',
-    restaurantsIds: ['1', '3'],
-  },
-  {
-    id: '3',
-    nom: 'Júlia Casas',
-    rol: 'Sommelier',
-    imatge:
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=600&q=80',
-    bio: 'Assessorament de maridatges i carta de vins per al restaurant escola.',
-    restaurantsIds: ['2'],
-  },
-  {
-    id: '4',
-    nom: 'Pol Riera',
-    rol: 'Responsable de reserves',
-    imatge:
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-    bio: 'Gestió de reserves, assignació de taules i coordinació de flux de clients.',
-    restaurantsIds: ['1', '2', '3'],
-  },
-];
-
-const restaurantsLocal = [
-  {
-    id: '1',
-    nom: 'Restaurant Escola Joviat',
-    especialitat: 'Cuina catalana i de temporada',
-    adreca: 'Carrer de la Sardana, 24, Manresa',
-    descripcio: 'Espai formatiu principal on es fan serveis reals amb alumnat.',
-    alumnesIds: ['1', '2', '4'],
-  },
-  {
-    id: '2',
-    nom: 'Joviat Gastrobar',
-    especialitat: 'Tapes creatives i menú degustació',
-    adreca: 'Passeig de Pere III, 18, Manresa',
-    descripcio: 'Format modern de sala per treballar tècniques de servei dinàmic.',
-    alumnesIds: ['1', '3', '4'],
-  },
-  {
-    id: '3',
-    nom: 'Aula Restaurant Pràctiques',
-    especialitat: 'Servei de sala i cuina d autor',
-    adreca: 'Avinguda Bases de Manresa, 12, Manresa',
-    descripcio: 'Entorn acadèmic per simulacions de servei i esdeveniments.',
-    alumnesIds: ['2', '4'],
-  },
-];
-
 const baseNavItems = [
   { key: 'inici', label: 'Inici' },
   { key: 'alumnes', label: 'Visualitzar Alumnes' },
@@ -127,9 +61,11 @@ function App() {
   const [selectedAlumne, setSelectedAlumne] = useState(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
   const [pageHistory, setPageHistory] = useState([]);
-  const [alumnes, setAlumnes] = useState(alumnesLocal);
-  const [restaurants, setRestaurants] = useState(restaurantsLocal);
-  const [dataSource, setDataSource] = useState('local');
+  const [alumnes, setAlumnes] = useState([]);
+  const [restaurants, setRestaurants] = useState([]);
+  const [dataSource, setDataSource] = useState('firebase');
+  const [dataError, setDataError] = useState('');
+  const [dataLoading, setDataLoading] = useState(true);
   const [authUser, setAuthUser] = useState(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -150,8 +86,16 @@ function App() {
   useEffect(() => {
     const loadFirebaseData = async () => {
       if (!hasFirebaseConfig || typeof fetch !== 'function') {
+        setAlumnes([]);
+        setRestaurants([]);
+        setDataSource('firebase');
+        setDataError('Error de conexión con el servidor');
+        setDataLoading(false);
         return;
       }
+
+      setDataLoading(true);
+      setDataError('');
 
       try {
         const config = getFirebaseConfig();
@@ -163,7 +107,7 @@ function App() {
         ]);
 
         if (!alumnesResponse.ok || !restaurantsResponse.ok) {
-          return;
+          throw new Error('firebase-response-error');
         }
 
         const alumnesPayload = await alumnesResponse.json();
@@ -176,17 +120,20 @@ function App() {
           parseFirestoreDoc(doc, index, 'restaurants')
         );
 
-        if (alumnesFirestore.length > 0) {
-          setAlumnes(alumnesFirestore);
+        if (alumnesFirestore.length === 0 && restaurantsFirestore.length === 0) {
+          throw new Error('firebase-empty-data');
         }
-        if (restaurantsFirestore.length > 0) {
-          setRestaurants(restaurantsFirestore);
-        }
-        if (alumnesFirestore.length > 0 || restaurantsFirestore.length > 0) {
-          setDataSource('firebase');
-        }
+
+        setAlumnes(alumnesFirestore);
+        setRestaurants(restaurantsFirestore);
+        setDataSource('firebase');
       } catch (_error) {
-        setDataSource('local');
+        setAlumnes([]);
+        setRestaurants([]);
+        setDataSource('firebase');
+        setDataError('Error de conexión con el servidor');
+      } finally {
+        setDataLoading(false);
       }
     };
 
@@ -336,6 +283,18 @@ function App() {
     }
   };
 
+  const renderDataStatus = () => {
+    if (dataLoading) {
+      return <p className="data-source">Cargando datos desde Firebase...</p>;
+    }
+
+    if (dataError) {
+      return <p className="login-error">{dataError}</p>;
+    }
+
+    return <p className="data-source">Font de dades: Firebase</p>;
+  };
+
   return (
     <div className="app-layout">
       <header className="app-header">
@@ -386,9 +345,7 @@ function App() {
       )}
 
       <main className="main-content">
-        <p className="data-source">
-          Font de dades: {dataSource === 'firebase' ? 'Firebase' : 'Local'}
-        </p>
+        {renderDataStatus()}
         {authUser && <p className="auth-badge">Sessió iniciada: {authUser.email}</p>}
 
         {activePage === 'inici' && (
@@ -431,7 +388,7 @@ function App() {
         {activePage === 'alumnes' && (
           <section className="students-section">
             <h2>Visualitzar Alumnes</h2>
-            <p className="students-subtitle">Llistat d'alumnes</p>
+            <p className="students-subtitle">Llistat d'alumnes des de Firebase</p>
             <input
               type="search"
               className="search-input"
@@ -440,36 +397,40 @@ function App() {
               value={searchAlumnes}
               onChange={(event) => setSearchAlumnes(event.target.value)}
             />
-            <div className="students-grid">
-              {filteredAlumnes.map((alumne) => {
-                const relatedRestaurants = (alumne.restaurantsIds || [])
-                  .map((restaurantId) => restaurantById[String(restaurantId)])
-                  .filter(Boolean);
+            {dataError ? (
+              <p className="login-error">{dataError}</p>
+            ) : (
+              <div className="students-grid">
+                {filteredAlumnes.map((alumne) => {
+                  const relatedRestaurants = (alumne.restaurantsIds || [])
+                    .map((restaurantId) => restaurantById[String(restaurantId)])
+                    .filter(Boolean);
 
-                return (
-                  <article className="student-card" key={alumne.id}>
-                    <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
-                    <div>
-                      <h3>{alumne.nom}</h3>
-                      <p>{alumne.rol}</p>
-                      <p className="relation-text">
-                        Restaurants:{' '}
-                        {relatedRestaurants.length
-                          ? relatedRestaurants.map((restaurant) => restaurant.nom).join(', ')
-                          : 'Sense dades'}
-                      </p>
-                      <button
-                        type="button"
-                        className="details-button"
-                        onClick={() => navigateToDetail('alumneDetail', alumne)}
-                      >
-                        Ver detalles
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                  return (
+                    <article className="student-card" key={alumne.id}>
+                      <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
+                      <div>
+                        <h3>{alumne.nom}</h3>
+                        <p>{alumne.rol}</p>
+                        <p className="relation-text">
+                          Restaurants:{' '}
+                          {relatedRestaurants.length
+                            ? relatedRestaurants.map((restaurant) => restaurant.nom).join(', ')
+                            : 'Sense dades'}
+                        </p>
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() => navigateToDetail('alumneDetail', alumne)}
+                        >
+                          Ver detalles
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -522,34 +483,38 @@ function App() {
               value={searchRestaurants}
               onChange={(event) => setSearchRestaurants(event.target.value)}
             />
-            <div className="restaurants-grid">
-              {filteredRestaurants.map((restaurant) => {
-                const relatedAlumnes = (restaurant.alumnesIds || [])
-                  .map((alumneId) => alumneById[String(alumneId)])
-                  .filter(Boolean);
+            {dataError ? (
+              <p className="login-error">{dataError}</p>
+            ) : (
+              <div className="restaurants-grid">
+                {filteredRestaurants.map((restaurant) => {
+                  const relatedAlumnes = (restaurant.alumnesIds || [])
+                    .map((alumneId) => alumneById[String(alumneId)])
+                    .filter(Boolean);
 
-                return (
-                  <article className="restaurant-card" key={restaurant.id}>
-                    <h3>{restaurant.nom}</h3>
-                    <p>{restaurant.especialitat}</p>
-                    <small>{restaurant.adreca}</small>
-                    <p className="relation-text">
-                      Alumnes:{' '}
-                      {relatedAlumnes.length
-                        ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
-                        : 'Sense dades'}
-                    </p>
-                    <button
-                      type="button"
-                      className="details-button"
-                      onClick={() => navigateToDetail('restaurantDetail', restaurant)}
-                    >
-                      Ver detalles
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
+                  return (
+                    <article className="restaurant-card" key={restaurant.id}>
+                      <h3>{restaurant.nom}</h3>
+                      <p>{restaurant.especialitat}</p>
+                      <small>{restaurant.adreca}</small>
+                      <p className="relation-text">
+                        Alumnes:{' '}
+                        {relatedAlumnes.length
+                          ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
+                          : 'Sense dades'}
+                      </p>
+                      <button
+                        type="button"
+                        className="details-button"
+                        onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                      >
+                        Ver detalles
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
