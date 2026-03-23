@@ -330,6 +330,18 @@ body {
   margin-top: 6px;
 }
 
+.management-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .map-wrapper {
   margin: 12px 0 14px;
   border-radius: 12px;

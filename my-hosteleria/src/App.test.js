@@ -78,7 +78,26 @@ afterEach(() => {
 });
 
 const mockFirebaseFetch = () =>
-  jest.spyOn(global, 'fetch').mockImplementation((url) => {
+  jest.spyOn(global, 'fetch').mockImplementation((url, options = {}) => {
+    if (String(url).includes('/Alumni?') && options.method === 'POST') {
+      return Promise.resolve({ ok: true, json: async () => ({ name: 'created' }) });
+    }
+
+    if (String(url).includes('identitytoolkit.googleapis.com')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ localId: 'new-alumni-id' }),
+      });
+    }
+
+    if (String(url).includes('/Alumni/alumni-1?') && options.method === 'DELETE') {
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    }
+
+    if (String(url).includes('/Alumni/alumni-1') && options.method === 'PATCH') {
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    }
+
     if (String(url).includes('/Alumni?')) {
       return Promise.resolve({ ok: true, json: async () => alumniPayload });
     }
@@ -142,7 +161,28 @@ test('shows local badge and server connection error when firebase returns no dat
   expect(screen.getByText(/font de dades: local/i)).toBeInTheDocument();
 });
 
-test('login tab renders and can switch to logout when administrator email exists', async () => {
+test('signup creates a new alumni profile with email and password', async () => {
+  mockFirebaseEnabled = true;
+  mockFirebaseFetch();
+
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.queryByText(/cargando datos desde firebase/i)).not.toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: /signup/i }));
+  fireEvent.change(screen.getByLabelText(/email \*/i), { target: { value: 'new@test.com' } });
+  fireEvent.change(screen.getByLabelText(/password \*/i), { target: { value: '123456' } });
+  fireEvent.change(screen.getByLabelText(/^nombre$/i), { target: { value: 'Nuevo Alumno' } });
+  fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+
+  await waitFor(() => {
+    expect(screen.getByText(/alumno registrado correctamente/i)).toBeInTheDocument();
+  });
+});
+
+test('admin login shows management tab and allows editing and deleting profiles', async () => {
   mockFirebaseEnabled = true;
   mockFirebaseFetch();
 
@@ -159,7 +199,21 @@ test('login tab renders and can switch to logout when administrator email exists
   fireEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /gestión/i })).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: /gestión/i }));
+  fireEvent.click(screen.getByRole('button', { name: /editar perfil/i }));
+  fireEvent.change(screen.getByDisplayValue(/aina martí/i), { target: { value: 'Aina Editada' } });
+  fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }));
+
+  await waitFor(() => {
+    expect(screen.getByText(/perfil actualizado correctamente/i)).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: /borrar perfil/i }));
+  await waitFor(() => {
+    expect(screen.getByText(/perfil eliminado correctamente/i)).toBeInTheDocument();
   });
 });
 

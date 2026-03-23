@@ -6,6 +6,7 @@ const baseNavItems = [
   { key: 'inici', label: 'Inici' },
   { key: 'alumnes', label: 'Visualitzar Alumnes' },
   { key: 'restaurants', label: 'Restaurants' },
+  { key: 'signup', label: 'SignUp' },
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
@@ -100,6 +101,13 @@ const restorePageState = (snapshot, setSelectedAlumne, setSelectedRestaurant, se
   setActivePage(snapshot.page);
 };
 
+const alumniToFirestoreFields = (profile) => ({
+  Name: { stringValue: profile.nom || '' },
+  PhotoURL: { stringValue: profile.imatge || '' },
+  Status: { stringValue: profile.status || '' },
+  email: { stringValue: profile.email || '' },
+});
+
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('inici');
@@ -119,6 +127,20 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [signUpForm, setSignUpForm] = useState({
+    nom: '',
+    imatge: '',
+    status: '',
+    email: '',
+    password: '',
+  });
+  const [signUpLoading, setSignUpLoading] = useState(false);
+  const [signUpError, setSignUpError] = useState('');
+  const [signUpSuccess, setSignUpSuccess] = useState('');
+  const [editingAlumneId, setEditingAlumneId] = useState(null);
+  const [editingForm, setEditingForm] = useState({ nom: '', imatge: '', status: '', email: '' });
+  const [managementMessage, setManagementMessage] = useState('');
+  const [managementError, setManagementError] = useState('');
 
   useEffect(() => {
     const closeOnResize = () => {
@@ -150,12 +172,13 @@ function App() {
         const config = getFirebaseConfig();
         const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
 
-        const [alumniResponse, restaurantResponse, relationResponse, administratorResponse] = await Promise.all([
-          fetch(`${baseUrl}/${config.alumniCollection}?key=${config.apiKey}`),
-          fetch(`${baseUrl}/${config.restaurantCollection}?key=${config.apiKey}`),
-          fetch(`${baseUrl}/${config.restAlumCollection}?key=${config.apiKey}`),
-          fetch(`${baseUrl}/${config.administratorCollection}?key=${config.apiKey}`),
-        ]);
+        const [alumniResponse, restaurantResponse, relationResponse, administratorResponse] =
+          await Promise.all([
+            fetch(`${baseUrl}/${config.alumniCollection}?key=${config.apiKey}`),
+            fetch(`${baseUrl}/${config.restaurantCollection}?key=${config.apiKey}`),
+            fetch(`${baseUrl}/${config.restAlumCollection}?key=${config.apiKey}`),
+            fetch(`${baseUrl}/${config.administratorCollection}?key=${config.apiKey}`),
+          ]);
 
         if (
           !alumniResponse.ok ||
@@ -178,7 +201,6 @@ function App() {
         const restaurantDocs = (restaurantPayload.documents || []).map(parseRestaurantDoc);
         const relationDocs = (relationPayload.documents || []).map(parseRelationDoc);
         const administratorDocs = (administratorPayload.documents || []).map(parseAdministratorDoc);
-
         const linkedData = buildLinkedData(alumniDocs, restaurantDocs, relationDocs);
 
         if (linkedData.alumnes.length === 0 && linkedData.restaurants.length === 0) {
@@ -212,13 +234,14 @@ function App() {
     [alumnes]
   );
 
-  const navItems = useMemo(
-    () => [
-      ...baseNavItems,
-      { key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' },
-    ],
-    [authUser]
-  );
+  const navItems = useMemo(() => {
+    const items = [...baseNavItems];
+    if (authUser?.isAdmin) {
+      items.push({ key: 'gestio', label: 'Gestión' });
+    }
+    items.push({ key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' });
+    return items;
+  }, [authUser]);
 
   const closeSidebarOnMobile = () => {
     if (window.innerWidth < 1024) {
@@ -230,6 +253,8 @@ function App() {
     if (page === 'logout') {
       setAuthUser(null);
       setLoginError('');
+      setManagementMessage('');
+      setManagementError('');
       setActivePage('inici');
       setPageHistory([]);
       closeSidebarOnMobile();
@@ -326,12 +351,165 @@ function App() {
         return;
       }
 
-      setAuthUser({ email: normalizedEmail });
+      setAuthUser({ email: normalizedEmail, isAdmin: true });
       setActivePage('inici');
     } catch (_error) {
       setLoginError('Error de conexión con el servidor');
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const handleSignUpChange = (field, value) => {
+    setSignUpForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSignUp = async (event) => {
+    event.preventDefault();
+    setSignUpError('');
+    setSignUpSuccess('');
+
+    const config = getFirebaseConfig();
+    const normalizedEmail = signUpForm.email.trim().toLowerCase();
+
+    if (!normalizedEmail || !signUpForm.password.trim()) {
+      setSignUpError('Email y password son obligatorios');
+      return;
+    }
+
+    setSignUpLoading(true);
+
+    try {
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: signUpForm.password,
+            returnSecureToken: true,
+          }),
+        }
+      );
+
+      const authPayload = await authResponse.json();
+      if (!authResponse.ok) {
+        throw new Error(authPayload.error?.message || 'signup-auth-error');
+      }
+
+      const profile = {
+        id: authPayload.localId,
+        nom: signUpForm.nom.trim() || normalizedEmail.split('@')[0],
+        status: signUpForm.status.trim() || 'Nou registre',
+        imatge: signUpForm.imatge.trim() || '/user_default',
+        email: normalizedEmail,
+        restaurantsIds: [],
+        restaurantRoles: [],
+      };
+
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const profileResponse = await fetch(
+        `${baseUrl}/${config.alumniCollection}?documentId=${authPayload.localId}&key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: alumniToFirestoreFields(profile) }),
+        }
+      );
+
+      const profilePayload = await profileResponse.json();
+      if (!profileResponse.ok) {
+        throw new Error(profilePayload.error?.message || 'signup-profile-error');
+      }
+
+      setAlumnes((current) => [...current, profile]);
+      setSignUpForm({ nom: '', imatge: '', status: '', email: '', password: '' });
+      setSignUpSuccess('Alumno registrado correctamente');
+    } catch (error) {
+      setSignUpError(error.message || 'No se ha podido completar el registro');
+    } finally {
+      setSignUpLoading(false);
+    }
+  };
+
+  const startEditingAlumne = (alumne) => {
+    setEditingAlumneId(alumne.id);
+    setEditingForm({
+      nom: alumne.nom,
+      imatge: alumne.imatge === '/user_default' ? '' : alumne.imatge,
+      status: alumne.status,
+      email: alumne.email,
+    });
+    setManagementMessage('');
+    setManagementError('');
+  };
+
+  const handleSaveAlumne = async (alumneId) => {
+    setManagementMessage('');
+    setManagementError('');
+
+    try {
+      const config = getFirebaseConfig();
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const updatedProfile = {
+        id: alumneId,
+        nom: editingForm.nom.trim(),
+        imatge: editingForm.imatge.trim() || '/user_default',
+        status: editingForm.status.trim(),
+        email: editingForm.email.trim().toLowerCase(),
+      };
+
+      const patchUrl = new URL(`${baseUrl}/${config.alumniCollection}/${alumneId}`);
+      patchUrl.searchParams.set('key', config.apiKey);
+      ['Name', 'PhotoURL', 'Status', 'email'].forEach((fieldPath) =>
+        patchUrl.searchParams.append('updateMask.fieldPaths', fieldPath)
+      );
+
+      const response = await fetch(patchUrl.toString(), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: alumniToFirestoreFields(updatedProfile) }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error?.message || 'update-alumni-error');
+      }
+
+      setAlumnes((current) =>
+        current.map((alumne) =>
+          alumne.id === alumneId ? { ...alumne, ...updatedProfile } : alumne
+        )
+      );
+      setEditingAlumneId(null);
+      setManagementMessage('Perfil actualizado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se ha podido actualizar el perfil');
+    }
+  };
+
+  const handleDeleteAlumne = async (alumneId) => {
+    setManagementMessage('');
+    setManagementError('');
+
+    try {
+      const config = getFirebaseConfig();
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const response = await fetch(
+        `${baseUrl}/${config.alumniCollection}/${alumneId}?key=${config.apiKey}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error?.message || 'delete-alumni-error');
+      }
+
+      setAlumnes((current) => current.filter((alumne) => alumne.id !== alumneId));
+      setManagementMessage('Perfil eliminado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se ha podido eliminar el perfil');
     }
   };
 
@@ -458,6 +636,64 @@ function App() {
           </section>
         )}
 
+        {activePage === 'signup' && (
+          <section className="detail-page login-panel">
+            <h2>SignUp</h2>
+            <form className="login-form" onSubmit={handleSignUp}>
+              <label>
+                Nombre
+                <input
+                  type="text"
+                  className="search-input"
+                  value={signUpForm.nom}
+                  onChange={(event) => handleSignUpChange('nom', event.target.value)}
+                />
+              </label>
+              <label>
+                PhotoURL
+                <input
+                  type="text"
+                  className="search-input"
+                  value={signUpForm.imatge}
+                  onChange={(event) => handleSignUpChange('imatge', event.target.value)}
+                />
+              </label>
+              <label>
+                Status
+                <input
+                  type="text"
+                  className="search-input"
+                  value={signUpForm.status}
+                  onChange={(event) => handleSignUpChange('status', event.target.value)}
+                />
+              </label>
+              <label>
+                Email *
+                <input
+                  type="email"
+                  className="search-input"
+                  value={signUpForm.email}
+                  onChange={(event) => handleSignUpChange('email', event.target.value)}
+                />
+              </label>
+              <label>
+                Password *
+                <input
+                  type="password"
+                  className="search-input"
+                  value={signUpForm.password}
+                  onChange={(event) => handleSignUpChange('password', event.target.value)}
+                />
+              </label>
+              {signUpError && <p className="login-error">{signUpError}</p>}
+              {signUpSuccess && <p className="auth-badge">{signUpSuccess}</p>}
+              <button type="submit" className="details-button" disabled={signUpLoading}>
+                {signUpLoading ? 'Registrando...' : 'Crear cuenta'}
+              </button>
+            </form>
+          </section>
+        )}
+
         {activePage === 'login' && (
           <section className="detail-page login-panel">
             <h2>Login administrador</h2>
@@ -476,6 +712,99 @@ function App() {
                 {loginLoading ? 'Comprovant accés...' : 'Entrar'}
               </button>
             </form>
+          </section>
+        )}
+
+        {activePage === 'gestio' && authUser?.isAdmin && (
+          <section>
+            <h2>Gestión de perfiles</h2>
+            <p>Desde aquí puedes editar o borrar los alumni dados de alta.</p>
+            {managementError && <p className="login-error">{managementError}</p>}
+            {managementMessage && <p className="auth-badge">{managementMessage}</p>}
+            <div className="detail-relations-grid">
+              {alumnes.map((alumne) => (
+                <article key={alumne.id} className="detail-page management-card">
+                  <img src={alumne.imatge} alt={alumne.nom} className="detail-image" />
+                  {editingAlumneId === alumne.id ? (
+                    <div className="login-form">
+                      <label>
+                        Nombre
+                        <input
+                          type="text"
+                          className="search-input"
+                          value={editingForm.nom}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, nom: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        PhotoURL
+                        <input
+                          type="text"
+                          className="search-input"
+                          value={editingForm.imatge}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, imatge: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Status
+                        <input
+                          type="text"
+                          className="search-input"
+                          value={editingForm.status}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, status: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Email
+                        <input
+                          type="email"
+                          className="search-input"
+                          value={editingForm.email}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, email: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="details-button"
+                        onClick={() => handleSaveAlumne(alumne.id)}
+                      >
+                        Guardar cambios
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <h3>{alumne.nom}</h3>
+                      <p>{alumne.status}</p>
+                      <p>{alumne.email}</p>
+                      <div className="management-actions">
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() => startEditingAlumne(alumne)}
+                        >
+                          Editar perfil
+                        </button>
+                        <button
+                          type="button"
+                          className="back-button"
+                          onClick={() => handleDeleteAlumne(alumne.id)}
+                        >
+                          Borrar perfil
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
           </section>
         )}
 
