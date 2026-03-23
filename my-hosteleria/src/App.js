@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import './App.css';
+import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
 
 const alumnesLocal = [
   {
@@ -67,14 +68,15 @@ const restaurantsLocal = [
   },
 ];
 
-const navItems = [
+const baseNavItems = [
   { key: 'inici', label: 'Inici' },
   { key: 'alumnes', label: 'Visualitzar Alumnes' },
   { key: 'restaurants', label: 'Restaurants' },
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
-const firestoreArray = (field) => (field?.arrayValue?.values || []).map((value) => value.stringValue).filter(Boolean);
+const firestoreArray = (field) =>
+  (field?.arrayValue?.values || []).map((value) => value.stringValue).filter(Boolean);
 
 const parseFirestoreDoc = (doc, index, kind) => {
   const fields = doc?.fields ?? {};
@@ -85,8 +87,15 @@ const parseFirestoreDoc = (doc, index, kind) => {
       id,
       nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Alumne ${index + 1}`,
       rol: firestoreString(fields.rol) || 'Sense rol',
-      imatge: firestoreString(fields.imatge) || firestoreString(fields.imagen) || 'https://via.placeholder.com/120',
-      bio: firestoreString(fields.bio) || firestoreString(fields.descripcio) || 'Sense descripció',
+      imatge:
+        firestoreString(fields.imatge) ||
+        firestoreString(fields.imagen) ||
+        'https://via.placeholder.com/120',
+      bio:
+        firestoreString(fields.bio) ||
+        firestoreString(fields.descripcio) ||
+        firestoreString(fields.descripcion) ||
+        'Sense descripció',
       restaurantsIds: firestoreArray(fields.restaurantsIds),
     };
   }
@@ -96,9 +105,18 @@ const parseFirestoreDoc = (doc, index, kind) => {
     nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Restaurant ${index + 1}`,
     especialitat: firestoreString(fields.especialitat) || 'Sense especialitat',
     adreca: firestoreString(fields.adreca) || firestoreString(fields.direccion) || 'Sense adreça',
-    descripcio: firestoreString(fields.descripcio) || firestoreString(fields.descripcion) || 'Sense descripció',
+    descripcio:
+      firestoreString(fields.descripcio) ||
+      firestoreString(fields.descripcion) ||
+      'Sense descripció',
     alumnesIds: firestoreArray(fields.alumnesIds),
   };
+};
+
+const restorePageState = (snapshot, setSelectedAlumne, setSelectedRestaurant, setActivePage) => {
+  setSelectedAlumne(snapshot.selectedAlumne || null);
+  setSelectedRestaurant(snapshot.selectedRestaurant || null);
+  setActivePage(snapshot.page);
 };
 
 function App() {
@@ -108,9 +126,15 @@ function App() {
   const [searchRestaurants, setSearchRestaurants] = useState('');
   const [selectedAlumne, setSelectedAlumne] = useState(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+  const [pageHistory, setPageHistory] = useState([]);
   const [alumnes, setAlumnes] = useState(alumnesLocal);
   const [restaurants, setRestaurants] = useState(restaurantsLocal);
   const [dataSource, setDataSource] = useState('local');
+  const [authUser, setAuthUser] = useState(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
     const closeOnResize = () => {
@@ -124,24 +148,23 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const loadFirebaseDataIfConfigExists = async () => {
+    const loadFirebaseData = async () => {
+      if (!hasFirebaseConfig || typeof fetch !== 'function') {
+        return;
+      }
+
       try {
-        const configResponse = await fetch('/firebase-connection.json', { cache: 'no-store' });
-        if (!configResponse.ok) return;
-
-        const config = await configResponse.json();
-        if (!config.projectId || !config.apiKey) return;
-
+        const config = getFirebaseConfig();
         const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
-        const alumnesCollection = config.alumnesCollection || 'alumnes';
-        const restaurantsCollection = config.restaurantsCollection || 'restaurants';
 
         const [alumnesResponse, restaurantsResponse] = await Promise.all([
-          fetch(`${baseUrl}/${alumnesCollection}?key=${config.apiKey}`),
-          fetch(`${baseUrl}/${restaurantsCollection}?key=${config.apiKey}`),
+          fetch(`${baseUrl}/${config.alumnesCollection}?key=${config.apiKey}`),
+          fetch(`${baseUrl}/${config.restaurantsCollection}?key=${config.apiKey}`),
         ]);
 
-        if (!alumnesResponse.ok || !restaurantsResponse.ok) return;
+        if (!alumnesResponse.ok || !restaurantsResponse.ok) {
+          return;
+        }
 
         const alumnesPayload = await alumnesResponse.json();
         const restaurantsPayload = await restaurantsResponse.json();
@@ -153,57 +176,164 @@ function App() {
           parseFirestoreDoc(doc, index, 'restaurants')
         );
 
-        if (alumnesFirestore.length) setAlumnes(alumnesFirestore);
-        if (restaurantsFirestore.length) setRestaurants(restaurantsFirestore);
-        if (alumnesFirestore.length || restaurantsFirestore.length) setDataSource('firebase');
+        if (alumnesFirestore.length > 0) {
+          setAlumnes(alumnesFirestore);
+        }
+        if (restaurantsFirestore.length > 0) {
+          setRestaurants(restaurantsFirestore);
+        }
+        if (alumnesFirestore.length > 0 || restaurantsFirestore.length > 0) {
+          setDataSource('firebase');
+        }
       } catch (_error) {
-        console.info('No s ha pogut carregar Firebase, s utilitzen dades locals.');
+        setDataSource('local');
       }
     };
 
-    loadFirebaseDataIfConfigExists();
+    loadFirebaseData();
   }, []);
 
   const restaurantById = useMemo(
     () => Object.fromEntries(restaurants.map((restaurant) => [String(restaurant.id), restaurant])),
     [restaurants]
   );
-
   const alumneById = useMemo(
     () => Object.fromEntries(alumnes.map((alumne) => [String(alumne.id), alumne])),
     [alumnes]
   );
 
+  const navItems = useMemo(
+    () => [
+      ...baseNavItems,
+      { key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' },
+    ],
+    [authUser]
+  );
+
+  const closeSidebarOnMobile = () => {
+    if (window.innerWidth < 1024) {
+      setIsSidebarOpen(false);
+    }
+  };
+
   const goToPage = (page) => {
+    if (page === 'logout') {
+      setAuthUser(null);
+      setLoginPassword('');
+      setLoginError('');
+      setActivePage('inici');
+      setPageHistory([]);
+      closeSidebarOnMobile();
+      return;
+    }
+
     setActivePage(page);
-    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+    closeSidebarOnMobile();
+  };
+
+  const navigateToDetail = (page, payload) => {
+    setPageHistory((current) => [
+      ...current,
+      {
+        page: activePage,
+        selectedAlumne,
+        selectedRestaurant,
+      },
+    ]);
+
+    if (page === 'alumneDetail') {
+      setSelectedAlumne(payload);
+      setSelectedRestaurant(null);
+    }
+
+    if (page === 'restaurantDetail') {
+      setSelectedRestaurant(payload);
+      setSelectedAlumne(null);
+    }
+
+    setActivePage(page);
+    closeSidebarOnMobile();
+  };
+
+  const goBack = (fallbackPage) => {
+    if (pageHistory.length === 0) {
+      setSelectedAlumne(null);
+      setSelectedRestaurant(null);
+      setActivePage(fallbackPage);
+      return;
+    }
+
+    const previousEntry = pageHistory[pageHistory.length - 1];
+    setPageHistory((current) => current.slice(0, -1));
+    restorePageState(previousEntry, setSelectedAlumne, setSelectedRestaurant, setActivePage);
   };
 
   const filteredAlumnes = useMemo(() => {
     const term = searchAlumnes.trim().toLowerCase();
-    if (!term) return alumnes;
-    return alumnes.filter((alumne) => alumne.nom.toLowerCase().includes(term) || alumne.rol.toLowerCase().includes(term));
-  }, [searchAlumnes, alumnes]);
+    if (!term) {
+      return alumnes;
+    }
+
+    return alumnes.filter(
+      (alumne) =>
+        alumne.nom.toLowerCase().includes(term) || alumne.rol.toLowerCase().includes(term)
+    );
+  }, [alumnes, searchAlumnes]);
 
   const filteredRestaurants = useMemo(() => {
     const term = searchRestaurants.trim().toLowerCase();
-    if (!term) return restaurants;
+    if (!term) {
+      return restaurants;
+    }
+
     return restaurants.filter(
       (restaurant) =>
         restaurant.nom.toLowerCase().includes(term) ||
         restaurant.especialitat.toLowerCase().includes(term) ||
         restaurant.adreca.toLowerCase().includes(term)
     );
-  }, [searchRestaurants, restaurants]);
+  }, [restaurants, searchRestaurants]);
 
-  const openAlumneDetail = (alumne) => {
-    setSelectedAlumne(alumne);
-    goToPage('alumneDetail');
-  };
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoginError('');
 
-  const openRestaurantDetail = (restaurant) => {
-    setSelectedRestaurant(restaurant);
-    goToPage('restaurantDetail');
+    if (!hasFirebaseConfig) {
+      setLoginError('Falta configurar Firebase en src/firebase.js o variables REACT_APP_FIREBASE_*');
+      return;
+    }
+
+    setLoginLoading(true);
+
+    try {
+      const { apiKey } = getFirebaseConfig();
+      const response = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: loginEmail,
+            password: loginPassword,
+            returnSecureToken: true,
+          }),
+        }
+      );
+
+      const payload = await response.json();
+      if (!response.ok) {
+        setLoginError(payload.error?.message || 'No s ha pogut iniciar sessió');
+        return;
+      }
+
+      setAuthUser({ email: payload.email, idToken: payload.idToken, localId: payload.localId });
+      setLoginPassword('');
+      setActivePage('inici');
+    } catch (_error) {
+      setLoginError('Error de xarxa en iniciar sessió amb Firebase');
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   return (
@@ -221,7 +351,12 @@ function App() {
           <span className="menu-line" />
         </button>
 
-        <button type="button" className="logo-button" aria-label="Ir al inicio" onClick={() => goToPage('inici')}>
+        <button
+          type="button"
+          className="logo-button"
+          aria-label="Ir al inicio"
+          onClick={() => goToPage('inici')}
+        >
           <img src="/logo_joviat.webp" alt="Logo Joviat" className="brand-logo" />
         </button>
       </header>
@@ -242,16 +377,54 @@ function App() {
       </aside>
 
       {isSidebarOpen && (
-        <button type="button" className="sidebar-overlay" aria-label="Cerrar barra lateral" onClick={() => setIsSidebarOpen(false)} />
+        <button
+          type="button"
+          className="sidebar-overlay"
+          aria-label="Cerrar barra lateral"
+          onClick={() => setIsSidebarOpen(false)}
+        />
       )}
 
       <main className="main-content">
-        <p className="data-source">Font de dades: {dataSource === 'firebase' ? 'Firebase' : 'Local'}</p>
+        <p className="data-source">
+          Font de dades: {dataSource === 'firebase' ? 'Firebase' : 'Local'}
+        </p>
+        {authUser && <p className="auth-badge">Sessió iniciada: {authUser.email}</p>}
 
         {activePage === 'inici' && (
           <section>
             <h1>Benvinguts a Hostaleria Joviat</h1>
             <p>Header responsive amb sidebar fixa en PC i desplegable en mòbil.</p>
+          </section>
+        )}
+
+        {activePage === 'login' && (
+          <section className="detail-page login-panel">
+            <h2>Login</h2>
+            <form className="login-form" onSubmit={handleLogin}>
+              <label>
+                Email
+                <input
+                  type="email"
+                  className="search-input"
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  className="search-input"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                />
+              </label>
+              {loginError && <p className="login-error">{loginError}</p>}
+              <button type="submit" className="details-button" disabled={loginLoading}>
+                {loginLoading ? 'Iniciant sessió...' : 'Entrar'}
+              </button>
+            </form>
           </section>
         )}
 
@@ -280,9 +453,16 @@ function App() {
                       <h3>{alumne.nom}</h3>
                       <p>{alumne.rol}</p>
                       <p className="relation-text">
-                        Restaurants: {relatedRestaurants.length ? relatedRestaurants.map((r) => r.nom).join(', ') : 'Sense dades'}
+                        Restaurants:{' '}
+                        {relatedRestaurants.length
+                          ? relatedRestaurants.map((restaurant) => restaurant.nom).join(', ')
+                          : 'Sense dades'}
                       </p>
-                      <button type="button" className="details-button" onClick={() => openAlumneDetail(alumne)}>
+                      <button
+                        type="button"
+                        className="details-button"
+                        onClick={() => navigateToDetail('alumneDetail', alumne)}
+                      >
                         Ver detalles
                       </button>
                     </div>
@@ -295,8 +475,8 @@ function App() {
 
         {activePage === 'alumneDetail' && selectedAlumne && (
           <section className="detail-page">
-            <button type="button" className="back-button" onClick={() => goToPage('alumnes')}>
-              ← Tornar a alumnes
+            <button type="button" className="back-button" onClick={() => goBack('alumnes')}>
+              ← Retroceder
             </button>
             <h2>{selectedAlumne.nom}</h2>
             <img src={selectedAlumne.imatge} alt={selectedAlumne.nom} className="detail-image" />
@@ -310,7 +490,12 @@ function App() {
                 .map((restaurantId) => restaurantById[String(restaurantId)])
                 .filter(Boolean)
                 .map((restaurant) => (
-                  <button key={restaurant.id} type="button" className="link-button" onClick={() => openRestaurantDetail(restaurant)}>
+                  <button
+                    key={restaurant.id}
+                    type="button"
+                    className="link-button"
+                    onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                  >
                     {restaurant.nom}
                   </button>
                 ))}
@@ -349,9 +534,16 @@ function App() {
                     <p>{restaurant.especialitat}</p>
                     <small>{restaurant.adreca}</small>
                     <p className="relation-text">
-                      Alumnes: {relatedAlumnes.length ? relatedAlumnes.map((a) => a.nom).join(', ') : 'Sense dades'}
+                      Alumnes:{' '}
+                      {relatedAlumnes.length
+                        ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
+                        : 'Sense dades'}
                     </p>
-                    <button type="button" className="details-button" onClick={() => openRestaurantDetail(restaurant)}>
+                    <button
+                      type="button"
+                      className="details-button"
+                      onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                    >
                       Ver detalles
                     </button>
                   </article>
@@ -363,8 +555,8 @@ function App() {
 
         {activePage === 'restaurantDetail' && selectedRestaurant && (
           <section className="detail-page">
-            <button type="button" className="back-button" onClick={() => goToPage('restaurants')}>
-              ← Tornar a restaurants
+            <button type="button" className="back-button" onClick={() => goBack('restaurants')}>
+              ← Retroceder
             </button>
             <h2>{selectedRestaurant.nom}</h2>
             <p>
@@ -380,7 +572,12 @@ function App() {
                 .map((alumneId) => alumneById[String(alumneId)])
                 .filter(Boolean)
                 .map((alumne) => (
-                  <button key={alumne.id} type="button" className="link-button" onClick={() => openAlumneDetail(alumne)}>
+                  <button
+                    key={alumne.id}
+                    type="button"
+                    className="link-button"
+                    onClick={() => navigateToDetail('alumneDetail', alumne)}
+                  >
                     {alumne.nom}
                   </button>
                 ))}

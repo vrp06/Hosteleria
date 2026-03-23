@@ -123,6 +123,41 @@ body {
   font-size: 0.82rem;
   font-weight: 700;
 }
+
+.auth-badge {
+  display: inline-block;
+  margin: 0 0 14px 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.login-panel {
+  max-width: 420px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.login-error {
+  margin: 0;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .students-section {
   margin-top: 12px;
 }
