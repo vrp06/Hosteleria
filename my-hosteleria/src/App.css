@@ -11,6 +11,13 @@ body {
 .app-layout {
   min-height: 100vh;
   color: #1f2937;
+  background: #f5f6fa;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.app-layout.dark-mode {
+  background: #111827;
+  color: #f9fafb;
 }
 
 .app-header {
@@ -24,6 +31,18 @@ body {
   padding: 0 16px;
   background: #111827;
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.2);
+}
+
+.theme-toggle {
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: #374151;
+  color: #f9fafb;
+  font-size: 1.1rem;
+  cursor: pointer;
 }
 
 .menu-toggle {
@@ -71,6 +90,11 @@ body {
   padding: 24px 16px;
 }
 
+.app-layout.dark-mode .sidebar {
+  background: #1f2937;
+  border-right-color: #374151;
+}
+
 .sidebar.open {
   transform: translateX(0);
 }
@@ -93,9 +117,18 @@ body {
   cursor: pointer;
 }
 
+.app-layout.dark-mode .nav-link {
+  color: #f9fafb;
+}
+
 .nav-link:hover,
 .nav-link.active {
   background: #f3f4f6;
+}
+
+.app-layout.dark-mode .nav-link:hover,
+.app-layout.dark-mode .nav-link.active {
+  background: #374151;
 }
 
 .sidebar-overlay {
@@ -111,7 +144,6 @@ body {
   max-width: 980px;
   margin: 0 auto;
 }
-
 
 .data-source {
   display: inline-block;
@@ -177,8 +209,15 @@ body {
   font-size: 0.96rem;
 }
 
+.app-layout.dark-mode .search-input {
+  background: #1f2937;
+  color: #f9fafb;
+  border-color: #4b5563;
+}
+
 .students-grid,
-.restaurants-grid {
+.restaurants-grid,
+.detail-relations-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
@@ -193,10 +232,25 @@ body {
   padding: 12px;
 }
 
-.student-card {
+.app-layout.dark-mode .student-card,
+.app-layout.dark-mode .restaurant-card,
+.app-layout.dark-mode .detail-page {
+  background: #1f2937;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.student-card,
+.relation-card.student-card {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.restaurant-card,
+.relation-card.restaurant-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .student-image {
@@ -205,6 +259,20 @@ body {
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #e5e7eb;
+}
+
+.restaurant-thumb,
+.detail-image {
+  width: 100%;
+  max-width: 220px;
+  height: 140px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 3px solid #e5e7eb;
+}
+
+.detail-image {
+  margin-bottom: 10px;
 }
 
 .student-card h3,
@@ -219,10 +287,17 @@ body {
   color: #4b5563;
 }
 
-.restaurant-card small {
-  display: block;
-  margin-top: 6px;
-  color: #6b7280;
+.app-layout.dark-mode .student-card p,
+.app-layout.dark-mode .restaurant-card p,
+.app-layout.dark-mode .detail-page p,
+.app-layout.dark-mode .detail-page h1,
+.app-layout.dark-mode .detail-page h2,
+.app-layout.dark-mode .detail-page h3,
+.app-layout.dark-mode .main-content p,
+.app-layout.dark-mode .main-content h1,
+.app-layout.dark-mode .main-content h2,
+.app-layout.dark-mode .main-content h3 {
+  color: #e5e7eb;
 }
 
 .relation-text {
@@ -230,24 +305,6 @@ body {
   color: #1f2937;
   font-size: 0.9rem;
 }
-
-.relation-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.link-button {
-  border: 1px solid #c7d2fe;
-  background: #eef2ff;
-  color: #312e81;
-  border-radius: 999px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
 
 .details-button,
 .back-button {
@@ -273,14 +330,6 @@ body {
   margin-top: 6px;
 }
 
-.detail-image {
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid #e5e7eb;
-}
-
 .map-wrapper {
   margin: 12px 0 14px;
   border-radius: 12px;
@@ -294,6 +343,10 @@ body {
   border: 0;
 }
 
+.detail-map iframe {
+  min-height: 280px;
+}
+
 @media (min-width: 768px) {
   .app-header {
     padding: 0 24px;
@@ -304,7 +357,8 @@ body {
   }
 
   .students-grid,
-  .restaurants-grid {
+  .restaurants-grid,
+  .detail-relations-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
   }

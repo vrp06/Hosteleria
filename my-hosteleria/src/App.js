@@ -22,7 +22,7 @@ const parseAlumniDoc = (doc, index) => {
     nom: firestoreString(fields.Name) || `Alumni ${index + 1}`,
     rol: firestoreString(fields.Status) || 'Sense estat',
     status: firestoreString(fields.Status) || 'Sense estat',
-    imatge: firestoreString(fields.PhotoURL) || 'https://via.placeholder.com/120',
+    imatge: firestoreString(fields.PhotoURL) || '/user_default',
     email: firestoreString(fields.email),
     restaurantsIds: [],
     restaurantRoles: [],
@@ -38,7 +38,7 @@ const parseRestaurantDoc = (doc, index) => {
     id,
     nom: firestoreString(fields.name) || `Restaurant ${index + 1}`,
     adreca: firestoreString(fields.Address) || 'Sense adreça',
-    imatge: firestoreString(fields.PhotoURL) || 'https://via.placeholder.com/320x180',
+    imatge: firestoreString(fields.PhotoURL) || '/restaurant_default',
     ubicacio: location,
     alumnesIds: [],
     alumnesRoles: [],
@@ -110,8 +110,10 @@ function App() {
   const [pageHistory, setPageHistory] = useState([]);
   const [alumnes, setAlumnes] = useState([]);
   const [restaurants, setRestaurants] = useState([]);
+  const [dataSource, setDataSource] = useState('firebase');
   const [dataError, setDataError] = useState('');
   const [dataLoading, setDataLoading] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [adminEmails, setAdminEmails] = useState([]);
   const [loginEmail, setLoginEmail] = useState('');
@@ -135,6 +137,7 @@ function App() {
         setAlumnes([]);
         setRestaurants([]);
         setAdminEmails([]);
+        setDataSource('local');
         setDataError('Error de conexión con el servidor');
         setDataLoading(false);
         return;
@@ -185,10 +188,12 @@ function App() {
         setAlumnes(linkedData.alumnes);
         setRestaurants(linkedData.restaurants);
         setAdminEmails(administratorDocs.filter(Boolean));
+        setDataSource('firebase');
       } catch (_error) {
         setAlumnes([]);
         setRestaurants([]);
         setAdminEmails([]);
+        setDataSource('local');
         setDataError('Error de conexión con el servidor');
       } finally {
         setDataLoading(false);
@@ -335,15 +340,57 @@ function App() {
       return <p className="data-source">Cargando datos desde Firebase...</p>;
     }
 
-    if (dataError) {
-      return <p className="login-error">{dataError}</p>;
+    return (
+      <>
+        {dataSource === 'local' && <p className="data-source">Font de dades: Local</p>}
+        {dataError && <p className="login-error">{dataError}</p>}
+      </>
+    );
+  };
+
+  const renderRelationCards = (items, type) => (
+    <div className="detail-relations-grid">
+      {items.map((item) => (
+        <article
+          key={item.id}
+          className={`relation-card ${type === 'alumne' ? 'student-card' : 'restaurant-card'}`}
+        >
+          <img
+            src={item.imatge}
+            alt={item.nom}
+            className={type === 'alumne' ? 'student-image' : 'restaurant-thumb'}
+          />
+          <div>
+            <h3>{item.nom}</h3>
+            <p>{type === 'alumne' ? item.status : item.adreca}</p>
+            {type === 'alumne' && <p>{item.email || 'Sense email'}</p>}
+            <button
+              type="button"
+              className="details-button"
+              onClick={() =>
+                navigateToDetail(type === 'alumne' ? 'alumneDetail' : 'restaurantDetail', item)
+              }
+            >
+              Ver detalles
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+
+  const restaurantMapUrl = (restaurant) => {
+    if (!restaurant?.ubicacio) {
+      return '';
     }
 
-    return <p className="data-source">Font de dades: Firebase</p>;
+    const { latitude, longitude } = restaurant.ubicacio;
+    const delta = 0.01;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - delta}%2C${latitude - delta}%2C${longitude + delta}%2C${latitude + delta}&layer=mapnik&marker=${latitude}%2C${longitude}`;
   };
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${isDarkMode ? 'dark-mode' : ''}`}>
       <header className="app-header">
         <button
           type="button"
@@ -364,6 +411,15 @@ function App() {
           onClick={() => goToPage('inici')}
         >
           <img src="/logo_joviat.webp" alt="Logo Joviat" className="brand-logo" />
+        </button>
+
+        <button
+          type="button"
+          className="theme-toggle"
+          aria-label="Activar modo oscuro"
+          onClick={() => setIsDarkMode((current) => !current)}
+        >
+          {isDarkMode ? '☀️' : '🌙'}
         </button>
       </header>
 
@@ -487,21 +543,12 @@ function App() {
               <strong>Email:</strong> {selectedAlumne.email || 'Sense email'}
             </p>
             <h3>Restaurants vinculats</h3>
-            <div className="relation-buttons">
-              {(selectedAlumne.restaurantsIds || [])
+            {renderRelationCards(
+              (selectedAlumne.restaurantsIds || [])
                 .map((restaurantId) => restaurantById[String(restaurantId)])
-                .filter(Boolean)
-                .map((restaurant) => (
-                  <button
-                    key={restaurant.id}
-                    type="button"
-                    className="link-button"
-                    onClick={() => navigateToDetail('restaurantDetail', restaurant)}
-                  >
-                    {restaurant.nom}
-                  </button>
-                ))}
-            </div>
+                .filter(Boolean),
+              'restaurant'
+            )}
           </section>
         )}
 
@@ -579,22 +626,22 @@ function App() {
                 {selectedRestaurant.ubicacio.longitude}
               </p>
             )}
+            {selectedRestaurant.ubicacio && (
+              <div className="map-wrapper detail-map">
+                <iframe
+                  title={`Mapa de ${selectedRestaurant.nom}`}
+                  src={restaurantMapUrl(selectedRestaurant)}
+                  loading="lazy"
+                />
+              </div>
+            )}
             <h3>Alumnes vinculats</h3>
-            <div className="relation-buttons">
-              {(selectedRestaurant.alumnesIds || [])
+            {renderRelationCards(
+              (selectedRestaurant.alumnesIds || [])
                 .map((alumneId) => alumneById[String(alumneId)])
-                .filter(Boolean)
-                .map((alumne) => (
-                  <button
-                    key={alumne.id}
-                    type="button"
-                    className="link-button"
-                    onClick={() => navigateToDetail('alumneDetail', alumne)}
-                  >
-                    {alumne.nom}
-                  </button>
-                ))}
-            </div>
+                .filter(Boolean),
+              'alumne'
+            )}
           </section>
         )}
       </main>
