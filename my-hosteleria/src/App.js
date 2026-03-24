@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import './App.css';
-import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
+import { auth, getFirebaseConfig, hasFirebaseConfig } from './firebase';
 
 const baseNavItems = [
   { key: 'inici', label: 'Inici' },
@@ -108,6 +114,15 @@ const alumniToFirestoreFields = (profile) => ({
   email: { stringValue: profile.email || '' },
 });
 
+const restaurantToFirestoreFields = (restaurant) => ({
+  name: { stringValue: restaurant.nom || '' },
+  Address: { stringValue: restaurant.adreca || '' },
+  PhotoURL: { stringValue: restaurant.imatge || '' },
+});
+
+const buildFirestoreReference = (projectId, collection, id) =>
+  `projects/${projectId}/databases/(default)/documents/${collection}/${id}`;
+
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('inici');
@@ -125,6 +140,7 @@ function App() {
   const [authUser, setAuthUser] = useState(null);
   const [adminEmails, setAdminEmails] = useState([]);
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [signUpForm, setSignUpForm] = useState({
@@ -141,6 +157,24 @@ function App() {
   const [editingForm, setEditingForm] = useState({ nom: '', imatge: '', status: '', email: '' });
   const [managementMessage, setManagementMessage] = useState('');
   const [managementError, setManagementError] = useState('');
+  const [newAlumneForm, setNewAlumneForm] = useState({
+    nom: '',
+    email: '',
+    password: '',
+    status: '',
+    imatge: '',
+    restaurantId: '',
+    rol: '',
+    currentJob: false,
+  });
+  const [newRestaurantForm, setNewRestaurantForm] = useState({
+    nom: '',
+    adreca: '',
+    imatge: '',
+    alumneId: '',
+    rol: '',
+    currentJob: false,
+  });
 
   useEffect(() => {
     const closeOnResize = () => {
@@ -225,6 +259,24 @@ function App() {
     loadFirebaseData();
   }, []);
 
+  useEffect(() => {
+    if (!auth) {
+      return undefined;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!firebaseUser?.email) {
+        setAuthUser(null);
+        return;
+      }
+
+      const normalizedEmail = firebaseUser.email.trim().toLowerCase();
+      setAuthUser({ email: normalizedEmail, isAdmin: adminEmails.includes(normalizedEmail) });
+    });
+
+    return unsubscribe;
+  }, [adminEmails]);
+
   const restaurantById = useMemo(
     () => Object.fromEntries(restaurants.map((restaurant) => [String(restaurant.id), restaurant])),
     [restaurants]
@@ -249,10 +301,15 @@ function App() {
     }
   };
 
-  const goToPage = (page) => {
+  const goToPage = async (page) => {
     if (page === 'logout') {
-      setAuthUser(null);
+      if (auth) {
+        await signOut(auth);
+      } else {
+        setAuthUser(null);
+      }
       setLoginError('');
+      setLoginPassword('');
       setManagementMessage('');
       setManagementError('');
       setActivePage('inici');
@@ -332,29 +389,25 @@ function App() {
     event.preventDefault();
     setLoginError('');
 
-    if (!hasFirebaseConfig) {
+    if (!hasFirebaseConfig || !auth) {
       setLoginError('Falta configurar Firebase en src/firebase.js o variables REACT_APP_FIREBASE_*');
       return;
     }
 
     const normalizedEmail = loginEmail.trim().toLowerCase();
-    if (!normalizedEmail) {
-      setLoginError('Introduce un email de administrador');
+    if (!normalizedEmail || !loginPassword.trim()) {
+      setLoginError('Introduce email y contraseña');
       return;
     }
 
     setLoginLoading(true);
 
     try {
-      if (!adminEmails.includes(normalizedEmail)) {
-        setLoginError('El email no existe en la colección Administrator');
-        return;
-      }
-
-      setAuthUser({ email: normalizedEmail, isAdmin: true });
+      await signInWithEmailAndPassword(auth, normalizedEmail, loginPassword);
+      setLoginPassword('');
       setActivePage('inici');
     } catch (_error) {
-      setLoginError('Error de conexión con el servidor');
+      setLoginError('Credenciales inválidas o usuario no autorizado en Firebase Auth');
     } finally {
       setLoginLoading(false);
     }
@@ -369,6 +422,11 @@ function App() {
     setSignUpError('');
     setSignUpSuccess('');
 
+    if (!auth || !hasFirebaseConfig) {
+      setSignUpError('Firebase Auth no está configurado');
+      return;
+    }
+
     const config = getFirebaseConfig();
     const normalizedEmail = signUpForm.email.trim().toLowerCase();
 
@@ -380,26 +438,14 @@ function App() {
     setSignUpLoading(true);
 
     try {
-      const authResponse = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: normalizedEmail,
-            password: signUpForm.password,
-            returnSecureToken: true,
-          }),
-        }
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        normalizedEmail,
+        signUpForm.password
       );
 
-      const authPayload = await authResponse.json();
-      if (!authResponse.ok) {
-        throw new Error(authPayload.error?.message || 'signup-auth-error');
-      }
-
       const profile = {
-        id: authPayload.localId,
+        id: userCredential.user.uid,
         nom: signUpForm.nom.trim() || normalizedEmail.split('@')[0],
         status: signUpForm.status.trim() || 'Nou registre',
         imatge: signUpForm.imatge.trim() || '/user_default',
@@ -410,7 +456,7 @@ function App() {
 
       const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
       const profileResponse = await fetch(
-        `${baseUrl}/${config.alumniCollection}?documentId=${authPayload.localId}&key=${config.apiKey}`,
+        `${baseUrl}/${config.alumniCollection}?documentId=${userCredential.user.uid}&key=${config.apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -510,6 +556,188 @@ function App() {
       setManagementMessage('Perfil eliminado correctamente');
     } catch (error) {
       setManagementError(error.message || 'No se ha podido eliminar el perfil');
+    }
+  };
+
+  const createRelation = async ({ alumniId, restaurantId, rol, currentJob }) => {
+    const config = getFirebaseConfig();
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+
+    const relationResponse = await fetch(`${baseUrl}/${config.restAlumCollection}?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          id_alumni: {
+            referenceValue: buildFirestoreReference(config.projectId, config.alumniCollection, alumniId),
+          },
+          id_restaurant: {
+            referenceValue: buildFirestoreReference(
+              config.projectId,
+              config.restaurantCollection,
+              restaurantId
+            ),
+          },
+          rol: { stringValue: rol || 'Sense rol' },
+          current_job: { booleanValue: Boolean(currentJob) },
+        },
+      }),
+    });
+
+    if (!relationResponse.ok) {
+      const payload = await relationResponse.json();
+      throw new Error(payload.error?.message || 'create-relation-error');
+    }
+  };
+
+  const handleCreateAlumneFromManagement = async (event) => {
+    event.preventDefault();
+    setManagementError('');
+    setManagementMessage('');
+
+    const normalizedEmail = newAlumneForm.email.trim().toLowerCase();
+    if (!normalizedEmail || !newAlumneForm.password.trim()) {
+      setManagementError('Para crear un alumno necesitas email y contraseña');
+      return;
+    }
+
+    try {
+      const config = getFirebaseConfig();
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: newAlumneForm.password,
+            returnSecureToken: true,
+          }),
+        }
+      );
+      const authPayload = await authResponse.json();
+      if (!authResponse.ok) {
+        throw new Error(authPayload.error?.message || 'create-alumni-auth-error');
+      }
+      const alumne = {
+        id: authPayload.localId,
+        nom: newAlumneForm.nom.trim() || normalizedEmail.split('@')[0],
+        status: newAlumneForm.status.trim() || 'Nou registre',
+        imatge: newAlumneForm.imatge.trim() || '/user_default',
+        email: normalizedEmail,
+        restaurantsIds: newAlumneForm.restaurantId ? [newAlumneForm.restaurantId] : [],
+        restaurantRoles: [],
+      };
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const profileResponse = await fetch(
+        `${baseUrl}/${config.alumniCollection}?documentId=${alumne.id}&key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: alumniToFirestoreFields(alumne) }),
+        }
+      );
+
+      if (!profileResponse.ok) {
+        const payload = await profileResponse.json();
+        throw new Error(payload.error?.message || 'create-alumni-error');
+      }
+
+      if (newAlumneForm.restaurantId) {
+        await createRelation({
+          alumniId: alumne.id,
+          restaurantId: newAlumneForm.restaurantId,
+          rol: newAlumneForm.rol.trim(),
+          currentJob: newAlumneForm.currentJob,
+        });
+      }
+
+      setAlumnes((current) => [...current, alumne]);
+      setRestaurants((current) =>
+        current.map((restaurant) =>
+          restaurant.id === newAlumneForm.restaurantId
+            ? { ...restaurant, alumnesIds: [...restaurant.alumnesIds, alumne.id] }
+            : restaurant
+        )
+      );
+      setNewAlumneForm({
+        nom: '',
+        email: '',
+        password: '',
+        status: '',
+        imatge: '',
+        restaurantId: '',
+        rol: '',
+        currentJob: false,
+      });
+      setManagementMessage('Alumno creado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se pudo crear el alumno');
+    }
+  };
+
+  const handleCreateRestaurant = async (event) => {
+    event.preventDefault();
+    setManagementError('');
+    setManagementMessage('');
+
+    if (!newRestaurantForm.nom.trim()) {
+      setManagementError('El nombre del restaurante es obligatorio');
+      return;
+    }
+
+    try {
+      const config = getFirebaseConfig();
+      const restaurant = {
+        nom: newRestaurantForm.nom.trim(),
+        adreca: newRestaurantForm.adreca.trim() || 'Sense adreça',
+        imatge: newRestaurantForm.imatge.trim() || '/restaurant_default',
+        alumnesIds: newRestaurantForm.alumneId ? [newRestaurantForm.alumneId] : [],
+        alumnesRoles: [],
+      };
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const response = await fetch(`${baseUrl}/${config.restaurantCollection}?key=${config.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: restaurantToFirestoreFields(restaurant) }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error?.message || 'create-restaurant-error');
+      }
+
+      const restaurantId = payload?.name?.split('/').pop();
+      const newRestaurant = { ...restaurant, id: restaurantId };
+
+      if (newRestaurantForm.alumneId) {
+        await createRelation({
+          alumniId: newRestaurantForm.alumneId,
+          restaurantId,
+          rol: newRestaurantForm.rol.trim(),
+          currentJob: newRestaurantForm.currentJob,
+        });
+      }
+
+      setRestaurants((current) => [...current, newRestaurant]);
+      setAlumnes((current) =>
+        current.map((alumne) =>
+          alumne.id === newRestaurantForm.alumneId
+            ? { ...alumne, restaurantsIds: [...alumne.restaurantsIds, restaurantId] }
+            : alumne
+        )
+      );
+      setNewRestaurantForm({
+        nom: '',
+        adreca: '',
+        imatge: '',
+        alumneId: '',
+        rol: '',
+        currentJob: false,
+      });
+      setManagementMessage('Restaurante creado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se pudo crear el restaurante');
     }
   };
 
@@ -696,10 +924,10 @@ function App() {
 
         {activePage === 'login' && (
           <section className="detail-page login-panel">
-            <h2>Login administrador</h2>
+            <h2>Login con Firebase Auth</h2>
             <form className="login-form" onSubmit={handleLogin}>
               <label>
-                Email administrador
+                Email
                 <input
                   type="email"
                   className="search-input"
@@ -707,6 +935,19 @@ function App() {
                   onChange={(event) => setLoginEmail(event.target.value)}
                 />
               </label>
+              <label>
+                Contraseña
+                <input
+                  type="password"
+                  className="search-input"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                />
+              </label>
+              <p className="students-subtitle">
+                El acceso de administrador se valida con la colección Administrator después de iniciar
+                sesión.
+              </p>
               {loginError && <p className="login-error">{loginError}</p>}
               <button type="submit" className="details-button" disabled={loginLoading}>
                 {loginLoading ? 'Comprovant accés...' : 'Entrar'}
@@ -717,10 +958,197 @@ function App() {
 
         {activePage === 'gestio' && authUser?.isAdmin && (
           <section>
-            <h2>Gestión de perfiles</h2>
-            <p>Desde aquí puedes editar o borrar los alumni dados de alta.</p>
+            <h2>Gestión de perfiles y restaurantes</h2>
+            <p>
+              Desde aquí puedes crear alumnos y restaurantes, vincularlos, y marcar si han trabajado o
+              trabajan actualmente.
+            </p>
             {managementError && <p className="login-error">{managementError}</p>}
             {managementMessage && <p className="auth-badge">{managementMessage}</p>}
+
+            <div className="management-create-grid">
+              <article className="detail-page">
+                <h3>Nuevo alumno</h3>
+                <form className="login-form" onSubmit={handleCreateAlumneFromManagement}>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Nombre"
+                    value={newAlumneForm.nom}
+                    onChange={(event) =>
+                      setNewAlumneForm((current) => ({ ...current, nom: event.target.value }))
+                    }
+                  />
+                  <input
+                    type="email"
+                    className="search-input"
+                    placeholder="Email*"
+                    value={newAlumneForm.email}
+                    onChange={(event) =>
+                      setNewAlumneForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                  />
+                  <input
+                    type="password"
+                    className="search-input"
+                    placeholder="Contraseña*"
+                    value={newAlumneForm.password}
+                    onChange={(event) =>
+                      setNewAlumneForm((current) => ({ ...current, password: event.target.value }))
+                    }
+                  />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Status"
+                    value={newAlumneForm.status}
+                    onChange={(event) =>
+                      setNewAlumneForm((current) => ({ ...current, status: event.target.value }))
+                    }
+                  />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="PhotoURL"
+                    value={newAlumneForm.imatge}
+                    onChange={(event) =>
+                      setNewAlumneForm((current) => ({ ...current, imatge: event.target.value }))
+                    }
+                  />
+                  <label>
+                    Vincular a restaurante
+                    <select
+                      className="search-input"
+                      value={newAlumneForm.restaurantId}
+                      onChange={(event) =>
+                        setNewAlumneForm((current) => ({
+                          ...current,
+                          restaurantId: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Sin vínculo inicial</option>
+                      {restaurants.map((restaurant) => (
+                        <option key={restaurant.id} value={restaurant.id}>
+                          {restaurant.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Rol en el restaurante"
+                    value={newAlumneForm.rol}
+                    onChange={(event) =>
+                      setNewAlumneForm((current) => ({ ...current, rol: event.target.value }))
+                    }
+                  />
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={newAlumneForm.currentJob}
+                      onChange={(event) =>
+                        setNewAlumneForm((current) => ({
+                          ...current,
+                          currentJob: event.target.checked,
+                        }))
+                      }
+                    />
+                    Trabajando actualmente
+                  </label>
+                  <button type="submit" className="details-button">
+                    Crear alumno
+                  </button>
+                </form>
+              </article>
+
+              <article className="detail-page">
+                <h3>Nuevo restaurante</h3>
+                <form className="login-form" onSubmit={handleCreateRestaurant}>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Nombre*"
+                    value={newRestaurantForm.nom}
+                    onChange={(event) =>
+                      setNewRestaurantForm((current) => ({ ...current, nom: event.target.value }))
+                    }
+                  />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Dirección"
+                    value={newRestaurantForm.adreca}
+                    onChange={(event) =>
+                      setNewRestaurantForm((current) => ({
+                        ...current,
+                        adreca: event.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="PhotoURL"
+                    value={newRestaurantForm.imatge}
+                    onChange={(event) =>
+                      setNewRestaurantForm((current) => ({
+                        ...current,
+                        imatge: event.target.value,
+                      }))
+                    }
+                  />
+                  <label>
+                    Vincular con alumno
+                    <select
+                      className="search-input"
+                      value={newRestaurantForm.alumneId}
+                      onChange={(event) =>
+                        setNewRestaurantForm((current) => ({
+                          ...current,
+                          alumneId: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Sin vínculo inicial</option>
+                      {alumnes.map((alumne) => (
+                        <option key={alumne.id} value={alumne.id}>
+                          {alumne.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Rol del alumno"
+                    value={newRestaurantForm.rol}
+                    onChange={(event) =>
+                      setNewRestaurantForm((current) => ({ ...current, rol: event.target.value }))
+                    }
+                  />
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={newRestaurantForm.currentJob}
+                      onChange={(event) =>
+                        setNewRestaurantForm((current) => ({
+                          ...current,
+                          currentJob: event.target.checked,
+                        }))
+                      }
+                    />
+                    Está trabajando actualmente
+                  </label>
+                  <button type="submit" className="details-button">
+                    Crear restaurante
+                  </button>
+                </form>
+              </article>
+            </div>
+
+            <h3>Alumnos</h3>
             <div className="detail-relations-grid">
               {alumnes.map((alumne) => (
                 <article key={alumne.id} className="detail-page management-card">
@@ -802,6 +1230,23 @@ function App() {
                       </div>
                     </>
                   )}
+                </article>
+              ))}
+            </div>
+            <h3>Restaurantes</h3>
+            <div className="detail-relations-grid">
+              {restaurants.map((restaurant) => (
+                <article key={restaurant.id} className="detail-page management-card">
+                  <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
+                  <h3>{restaurant.nom}</h3>
+                  <p>{restaurant.adreca}</p>
+                  <p>
+                    Alumnos vinculados:{' '}
+                    {(restaurant.alumnesIds || [])
+                      .map((id) => alumneById[String(id)]?.nom)
+                      .filter(Boolean)
+                      .join(', ') || 'Sin datos'}
+                  </p>
                 </article>
               ))}
             </div>
