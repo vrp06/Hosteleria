@@ -32,11 +32,11 @@ const parseAlumniDoc = (doc, index) => {
 const parseRestaurantDoc = (doc, index) => {
   const fields = doc?.fields ?? {};
   const id = doc?.name?.split('/').pop() || `restaurant-${index}`;
-  const location = firestoreGeoPoint(fields.location);
+  const location = firestoreGeoPoint(fields.Location) || firestoreGeoPoint(fields.location);
 
   return {
     id,
-    nom: firestoreString(fields.name) || `Restaurant ${index + 1}`,
+    nom: firestoreString(fields.Name) || firestoreString(fields.name) || `Restaurant ${index + 1}`,
     adreca: firestoreString(fields.Address) || 'Sense adreça',
     imatge: firestoreString(fields.PhotoURL) || '/restaurant_default',
     ubicacio: location,
@@ -59,7 +59,7 @@ const parseRelationDoc = (doc, index) => {
 
 const parseAdministratorDoc = (doc) => {
   const fields = doc?.fields ?? {};
-  return firestoreString(fields.Email).trim().toLowerCase();
+  return (firestoreString(fields.Email) || firestoreString(fields.email)).trim().toLowerCase();
 };
 
 const buildLinkedData = (alumniDocs, restaurantDocs, relationDocs) => {
@@ -108,7 +108,7 @@ const alumniToFirestoreFields = (profile) => ({
 });
 
 const restaurantToFirestoreFields = (restaurant) => ({
-  name: { stringValue: restaurant.nom || '' },
+  Name: { stringValue: restaurant.nom || '' },
   Address: { stringValue: restaurant.adreca || '' },
   PhotoURL: { stringValue: restaurant.imatge || '' },
 });
@@ -401,7 +401,7 @@ function App() {
       setLoginPassword('');
       setActivePage('inici');
     } catch (_error) {
-      setLoginError('Credenciales inválidas o usuario no autorizado en Firebase Auth');
+      setLoginError('Credenciales inválidas en Firebase Auth');
     } finally {
       setLoginLoading(false);
     }
@@ -1390,6 +1390,11 @@ function App() {
                     <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
                     <h3>{restaurant.nom}</h3>
                     <p>{restaurant.adreca}</p>
+                    {restaurant.ubicacio && (
+                      <p>
+                        Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
+                      </p>
+                    )}
                     <p>
                       Alumnos vinculados:{' '}
                       {(restaurant.alumnesIds || [])
@@ -1519,6 +1524,11 @@ function App() {
                       <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
                       <h3>{restaurant.nom}</h3>
                       <p>{restaurant.adreca}</p>
+                      {restaurant.ubicacio && (
+                        <p>
+                          Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
+                        </p>
+                      )}
                       <p className="relation-text">
                         Alumnes:{' '}
                         {relatedAlumnes.length
