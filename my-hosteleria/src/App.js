@@ -2,114 +2,96 @@ import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
 
-const alumnesLocal = [
-  {
-    id: '1',
-    nom: 'Aina Martí',
-    rol: 'Cap de sala',
-    imatge:
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
-    bio: 'Coordina el servei de sala i l atenció als clients durant el torn de pràctiques.',
-    restaurantsIds: ['1', '2'],
-  },
-  {
-    id: '2',
-    nom: 'Nil Ferrer',
-    rol: 'Cuiner de partida',
-    imatge:
-      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80',
-    bio: 'Especialitzat en partida de calents i control de temps de servei.',
-    restaurantsIds: ['1', '3'],
-  },
-  {
-    id: '3',
-    nom: 'Júlia Casas',
-    rol: 'Sommelier',
-    imatge:
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=600&q=80',
-    bio: 'Assessorament de maridatges i carta de vins per al restaurant escola.',
-    restaurantsIds: ['2'],
-  },
-  {
-    id: '4',
-    nom: 'Pol Riera',
-    rol: 'Responsable de reserves',
-    imatge:
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-    bio: 'Gestió de reserves, assignació de taules i coordinació de flux de clients.',
-    restaurantsIds: ['1', '2', '3'],
-  },
-];
-
-const restaurantsLocal = [
-  {
-    id: '1',
-    nom: 'Restaurant Escola Joviat',
-    especialitat: 'Cuina catalana i de temporada',
-    adreca: 'Carrer de la Sardana, 24, Manresa',
-    descripcio: 'Espai formatiu principal on es fan serveis reals amb alumnat.',
-    alumnesIds: ['1', '2', '4'],
-  },
-  {
-    id: '2',
-    nom: 'Joviat Gastrobar',
-    especialitat: 'Tapes creatives i menú degustació',
-    adreca: 'Passeig de Pere III, 18, Manresa',
-    descripcio: 'Format modern de sala per treballar tècniques de servei dinàmic.',
-    alumnesIds: ['1', '3', '4'],
-  },
-  {
-    id: '3',
-    nom: 'Aula Restaurant Pràctiques',
-    especialitat: 'Servei de sala i cuina d autor',
-    adreca: 'Avinguda Bases de Manresa, 12, Manresa',
-    descripcio: 'Entorn acadèmic per simulacions de servei i esdeveniments.',
-    alumnesIds: ['2', '4'],
-  },
-];
-
 const baseNavItems = [
   { key: 'inici', label: 'Inici' },
   { key: 'alumnes', label: 'Visualitzar Alumnes' },
   { key: 'restaurants', label: 'Restaurants' },
+  { key: 'signup', label: 'SignUp' },
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
-const firestoreArray = (field) =>
-  (field?.arrayValue?.values || []).map((value) => value.stringValue).filter(Boolean);
+const firestoreBoolean = (field) => field?.booleanValue ?? false;
+const firestoreGeoPoint = (field) => field?.geoPointValue ?? null;
+const firestoreReferenceId = (field) => field?.referenceValue?.split('/').pop() ?? '';
 
-const parseFirestoreDoc = (doc, index, kind) => {
+const parseAlumniDoc = (doc, index) => {
   const fields = doc?.fields ?? {};
-  const id = doc?.name?.split('/').pop() || `doc-${index}`;
-
-  if (kind === 'alumnes') {
-    return {
-      id,
-      nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Alumne ${index + 1}`,
-      rol: firestoreString(fields.rol) || 'Sense rol',
-      imatge:
-        firestoreString(fields.imatge) ||
-        firestoreString(fields.imagen) ||
-        'https://via.placeholder.com/120',
-      bio:
-        firestoreString(fields.bio) ||
-        firestoreString(fields.descripcio) ||
-        firestoreString(fields.descripcion) ||
-        'Sense descripció',
-      restaurantsIds: firestoreArray(fields.restaurantsIds),
-    };
-  }
+  const id = doc?.name?.split('/').pop() || `alumni-${index}`;
 
   return {
     id,
-    nom: firestoreString(fields.nom) || firestoreString(fields.nombre) || `Restaurant ${index + 1}`,
-    especialitat: firestoreString(fields.especialitat) || 'Sense especialitat',
-    adreca: firestoreString(fields.adreca) || firestoreString(fields.direccion) || 'Sense adreça',
-    descripcio:
-      firestoreString(fields.descripcio) ||
-      firestoreString(fields.descripcion) ||
-      'Sense descripció',
-    alumnesIds: firestoreArray(fields.alumnesIds),
+    nom: firestoreString(fields.Name) || `Alumni ${index + 1}`,
+    rol: firestoreString(fields.Status) || 'Sense estat',
+    status: firestoreString(fields.Status) || 'Sense estat',
+    imatge: firestoreString(fields.PhotoURL) || '/user_default',
+    email: firestoreString(fields.email),
+    restaurantsIds: [],
+    restaurantRoles: [],
+  };
+};
+
+const parseRestaurantDoc = (doc, index) => {
+  const fields = doc?.fields ?? {};
+  const id = doc?.name?.split('/').pop() || `restaurant-${index}`;
+  const location = firestoreGeoPoint(fields.location);
+
+  return {
+    id,
+    nom: firestoreString(fields.name) || `Restaurant ${index + 1}`,
+    adreca: firestoreString(fields.Address) || 'Sense adreça',
+    imatge: firestoreString(fields.PhotoURL) || '/restaurant_default',
+    ubicacio: location,
+    alumnesIds: [],
+    alumnesRoles: [],
+  };
+};
+
+const parseRelationDoc = (doc, index) => {
+  const fields = doc?.fields ?? {};
+
+  return {
+    id: doc?.name?.split('/').pop() || `relation-${index}`,
+    alumniId: firestoreReferenceId(fields.id_alumni),
+    restaurantId: firestoreReferenceId(fields.id_restaurant),
+    rol: firestoreString(fields.rol) || 'Sense rol',
+    currentJob: firestoreBoolean(fields.current_job),
+  };
+};
+
+const parseAdministratorDoc = (doc) => {
+  const fields = doc?.fields ?? {};
+  return firestoreString(fields.Email).trim().toLowerCase();
+};
+
+const buildLinkedData = (alumniDocs, restaurantDocs, relationDocs) => {
+  const alumniMap = new Map(alumniDocs.map((alumni) => [alumni.id, { ...alumni }]));
+  const restaurantMap = new Map(restaurantDocs.map((restaurant) => [restaurant.id, { ...restaurant }]));
+
+  relationDocs.forEach((relation) => {
+    const alumni = alumniMap.get(relation.alumniId);
+    const restaurant = restaurantMap.get(relation.restaurantId);
+
+    if (!alumni || !restaurant) {
+      return;
+    }
+
+    if (!alumni.restaurantsIds.includes(restaurant.id)) {
+      alumni.restaurantsIds.push(restaurant.id);
+    }
+
+    if (!restaurant.alumnesIds.includes(alumni.id)) {
+      restaurant.alumnesIds.push(alumni.id);
+    }
+
+    if (relation.currentJob) {
+      alumni.restaurantRoles.push({ restaurantId: restaurant.id, rol: relation.rol });
+      restaurant.alumnesRoles.push({ alumneId: alumni.id, rol: relation.rol });
+    }
+  });
+
+  return {
+    alumnes: Array.from(alumniMap.values()),
+    restaurants: Array.from(restaurantMap.values()),
   };
 };
 
@@ -119,6 +101,13 @@ const restorePageState = (snapshot, setSelectedAlumne, setSelectedRestaurant, se
   setActivePage(snapshot.page);
 };
 
+const alumniToFirestoreFields = (profile) => ({
+  Name: { stringValue: profile.nom || '' },
+  PhotoURL: { stringValue: profile.imatge || '' },
+  Status: { stringValue: profile.status || '' },
+  email: { stringValue: profile.email || '' },
+});
+
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('inici');
@@ -127,14 +116,31 @@ function App() {
   const [selectedAlumne, setSelectedAlumne] = useState(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
   const [pageHistory, setPageHistory] = useState([]);
-  const [alumnes, setAlumnes] = useState(alumnesLocal);
-  const [restaurants, setRestaurants] = useState(restaurantsLocal);
-  const [dataSource, setDataSource] = useState('local');
+  const [alumnes, setAlumnes] = useState([]);
+  const [restaurants, setRestaurants] = useState([]);
+  const [dataSource, setDataSource] = useState('firebase');
+  const [dataError, setDataError] = useState('');
+  const [dataLoading, setDataLoading] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [authUser, setAuthUser] = useState(null);
+  const [adminEmails, setAdminEmails] = useState([]);
   const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [signUpForm, setSignUpForm] = useState({
+    nom: '',
+    imatge: '',
+    status: '',
+    email: '',
+    password: '',
+  });
+  const [signUpLoading, setSignUpLoading] = useState(false);
+  const [signUpError, setSignUpError] = useState('');
+  const [signUpSuccess, setSignUpSuccess] = useState('');
+  const [editingAlumneId, setEditingAlumneId] = useState(null);
+  const [editingForm, setEditingForm] = useState({ nom: '', imatge: '', status: '', email: '' });
+  const [managementMessage, setManagementMessage] = useState('');
+  const [managementError, setManagementError] = useState('');
 
   useEffect(() => {
     const closeOnResize = () => {
@@ -150,43 +156,69 @@ function App() {
   useEffect(() => {
     const loadFirebaseData = async () => {
       if (!hasFirebaseConfig || typeof fetch !== 'function') {
+        setAlumnes([]);
+        setRestaurants([]);
+        setAdminEmails([]);
+        setDataSource('local');
+        setDataError('Error de conexión con el servidor');
+        setDataLoading(false);
         return;
       }
+
+      setDataLoading(true);
+      setDataError('');
 
       try {
         const config = getFirebaseConfig();
         const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
 
-        const [alumnesResponse, restaurantsResponse] = await Promise.all([
-          fetch(`${baseUrl}/${config.alumnesCollection}?key=${config.apiKey}`),
-          fetch(`${baseUrl}/${config.restaurantsCollection}?key=${config.apiKey}`),
-        ]);
+        const [alumniResponse, restaurantResponse, relationResponse, administratorResponse] =
+          await Promise.all([
+            fetch(`${baseUrl}/${config.alumniCollection}?key=${config.apiKey}`),
+            fetch(`${baseUrl}/${config.restaurantCollection}?key=${config.apiKey}`),
+            fetch(`${baseUrl}/${config.restAlumCollection}?key=${config.apiKey}`),
+            fetch(`${baseUrl}/${config.administratorCollection}?key=${config.apiKey}`),
+          ]);
 
-        if (!alumnesResponse.ok || !restaurantsResponse.ok) {
-          return;
+        if (
+          !alumniResponse.ok ||
+          !restaurantResponse.ok ||
+          !relationResponse.ok ||
+          !administratorResponse.ok
+        ) {
+          throw new Error('firebase-response-error');
         }
 
-        const alumnesPayload = await alumnesResponse.json();
-        const restaurantsPayload = await restaurantsResponse.json();
+        const [alumniPayload, restaurantPayload, relationPayload, administratorPayload] =
+          await Promise.all([
+            alumniResponse.json(),
+            restaurantResponse.json(),
+            relationResponse.json(),
+            administratorResponse.json(),
+          ]);
 
-        const alumnesFirestore = (alumnesPayload.documents || []).map((doc, index) =>
-          parseFirestoreDoc(doc, index, 'alumnes')
-        );
-        const restaurantsFirestore = (restaurantsPayload.documents || []).map((doc, index) =>
-          parseFirestoreDoc(doc, index, 'restaurants')
-        );
+        const alumniDocs = (alumniPayload.documents || []).map(parseAlumniDoc);
+        const restaurantDocs = (restaurantPayload.documents || []).map(parseRestaurantDoc);
+        const relationDocs = (relationPayload.documents || []).map(parseRelationDoc);
+        const administratorDocs = (administratorPayload.documents || []).map(parseAdministratorDoc);
+        const linkedData = buildLinkedData(alumniDocs, restaurantDocs, relationDocs);
 
-        if (alumnesFirestore.length > 0) {
-          setAlumnes(alumnesFirestore);
+        if (linkedData.alumnes.length === 0 && linkedData.restaurants.length === 0) {
+          throw new Error('firebase-empty-data');
         }
-        if (restaurantsFirestore.length > 0) {
-          setRestaurants(restaurantsFirestore);
-        }
-        if (alumnesFirestore.length > 0 || restaurantsFirestore.length > 0) {
-          setDataSource('firebase');
-        }
+
+        setAlumnes(linkedData.alumnes);
+        setRestaurants(linkedData.restaurants);
+        setAdminEmails(administratorDocs.filter(Boolean));
+        setDataSource('firebase');
       } catch (_error) {
+        setAlumnes([]);
+        setRestaurants([]);
+        setAdminEmails([]);
         setDataSource('local');
+        setDataError('Error de conexión con el servidor');
+      } finally {
+        setDataLoading(false);
       }
     };
 
@@ -202,13 +234,14 @@ function App() {
     [alumnes]
   );
 
-  const navItems = useMemo(
-    () => [
-      ...baseNavItems,
-      { key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' },
-    ],
-    [authUser]
-  );
+  const navItems = useMemo(() => {
+    const items = [...baseNavItems];
+    if (authUser?.isAdmin) {
+      items.push({ key: 'gestio', label: 'Gestión' });
+    }
+    items.push({ key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' });
+    return items;
+  }, [authUser]);
 
   const closeSidebarOnMobile = () => {
     if (window.innerWidth < 1024) {
@@ -219,8 +252,9 @@ function App() {
   const goToPage = (page) => {
     if (page === 'logout') {
       setAuthUser(null);
-      setLoginPassword('');
       setLoginError('');
+      setManagementMessage('');
+      setManagementError('');
       setActivePage('inici');
       setPageHistory([]);
       closeSidebarOnMobile();
@@ -276,7 +310,9 @@ function App() {
 
     return alumnes.filter(
       (alumne) =>
-        alumne.nom.toLowerCase().includes(term) || alumne.rol.toLowerCase().includes(term)
+        alumne.nom.toLowerCase().includes(term) ||
+        alumne.rol.toLowerCase().includes(term) ||
+        alumne.email.toLowerCase().includes(term)
     );
   }, [alumnes, searchAlumnes]);
 
@@ -288,9 +324,7 @@ function App() {
 
     return restaurants.filter(
       (restaurant) =>
-        restaurant.nom.toLowerCase().includes(term) ||
-        restaurant.especialitat.toLowerCase().includes(term) ||
-        restaurant.adreca.toLowerCase().includes(term)
+        restaurant.nom.toLowerCase().includes(term) || restaurant.adreca.toLowerCase().includes(term)
     );
   }, [restaurants, searchRestaurants]);
 
@@ -303,41 +337,238 @@ function App() {
       return;
     }
 
+    const normalizedEmail = loginEmail.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setLoginError('Introduce un email de administrador');
+      return;
+    }
+
     setLoginLoading(true);
 
     try {
-      const { apiKey } = getFirebaseConfig();
-      const response = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: loginEmail,
-            password: loginPassword,
-            returnSecureToken: true,
-          }),
-        }
-      );
-
-      const payload = await response.json();
-      if (!response.ok) {
-        setLoginError(payload.error?.message || 'No s ha pogut iniciar sessió');
+      if (!adminEmails.includes(normalizedEmail)) {
+        setLoginError('El email no existe en la colección Administrator');
         return;
       }
 
-      setAuthUser({ email: payload.email, idToken: payload.idToken, localId: payload.localId });
-      setLoginPassword('');
+      setAuthUser({ email: normalizedEmail, isAdmin: true });
       setActivePage('inici');
     } catch (_error) {
-      setLoginError('Error de xarxa en iniciar sessió amb Firebase');
+      setLoginError('Error de conexión con el servidor');
     } finally {
       setLoginLoading(false);
     }
   };
 
+  const handleSignUpChange = (field, value) => {
+    setSignUpForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSignUp = async (event) => {
+    event.preventDefault();
+    setSignUpError('');
+    setSignUpSuccess('');
+
+    const config = getFirebaseConfig();
+    const normalizedEmail = signUpForm.email.trim().toLowerCase();
+
+    if (!normalizedEmail || !signUpForm.password.trim()) {
+      setSignUpError('Email y password son obligatorios');
+      return;
+    }
+
+    setSignUpLoading(true);
+
+    try {
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: signUpForm.password,
+            returnSecureToken: true,
+          }),
+        }
+      );
+
+      const authPayload = await authResponse.json();
+      if (!authResponse.ok) {
+        throw new Error(authPayload.error?.message || 'signup-auth-error');
+      }
+
+      const profile = {
+        id: authPayload.localId,
+        nom: signUpForm.nom.trim() || normalizedEmail.split('@')[0],
+        status: signUpForm.status.trim() || 'Nou registre',
+        imatge: signUpForm.imatge.trim() || '/user_default',
+        email: normalizedEmail,
+        restaurantsIds: [],
+        restaurantRoles: [],
+      };
+
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const profileResponse = await fetch(
+        `${baseUrl}/${config.alumniCollection}?documentId=${authPayload.localId}&key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: alumniToFirestoreFields(profile) }),
+        }
+      );
+
+      const profilePayload = await profileResponse.json();
+      if (!profileResponse.ok) {
+        throw new Error(profilePayload.error?.message || 'signup-profile-error');
+      }
+
+      setAlumnes((current) => [...current, profile]);
+      setSignUpForm({ nom: '', imatge: '', status: '', email: '', password: '' });
+      setSignUpSuccess('Alumno registrado correctamente');
+    } catch (error) {
+      setSignUpError(error.message || 'No se ha podido completar el registro');
+    } finally {
+      setSignUpLoading(false);
+    }
+  };
+
+  const startEditingAlumne = (alumne) => {
+    setEditingAlumneId(alumne.id);
+    setEditingForm({
+      nom: alumne.nom,
+      imatge: alumne.imatge === '/user_default' ? '' : alumne.imatge,
+      status: alumne.status,
+      email: alumne.email,
+    });
+    setManagementMessage('');
+    setManagementError('');
+  };
+
+  const handleSaveAlumne = async (alumneId) => {
+    setManagementMessage('');
+    setManagementError('');
+
+    try {
+      const config = getFirebaseConfig();
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const updatedProfile = {
+        id: alumneId,
+        nom: editingForm.nom.trim(),
+        imatge: editingForm.imatge.trim() || '/user_default',
+        status: editingForm.status.trim(),
+        email: editingForm.email.trim().toLowerCase(),
+      };
+
+      const patchUrl = new URL(`${baseUrl}/${config.alumniCollection}/${alumneId}`);
+      patchUrl.searchParams.set('key', config.apiKey);
+      ['Name', 'PhotoURL', 'Status', 'email'].forEach((fieldPath) =>
+        patchUrl.searchParams.append('updateMask.fieldPaths', fieldPath)
+      );
+
+      const response = await fetch(patchUrl.toString(), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: alumniToFirestoreFields(updatedProfile) }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error?.message || 'update-alumni-error');
+      }
+
+      setAlumnes((current) =>
+        current.map((alumne) =>
+          alumne.id === alumneId ? { ...alumne, ...updatedProfile } : alumne
+        )
+      );
+      setEditingAlumneId(null);
+      setManagementMessage('Perfil actualizado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se ha podido actualizar el perfil');
+    }
+  };
+
+  const handleDeleteAlumne = async (alumneId) => {
+    setManagementMessage('');
+    setManagementError('');
+
+    try {
+      const config = getFirebaseConfig();
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const response = await fetch(
+        `${baseUrl}/${config.alumniCollection}/${alumneId}?key=${config.apiKey}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error?.message || 'delete-alumni-error');
+      }
+
+      setAlumnes((current) => current.filter((alumne) => alumne.id !== alumneId));
+      setManagementMessage('Perfil eliminado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se ha podido eliminar el perfil');
+    }
+  };
+
+  const renderDataStatus = () => {
+    if (dataLoading) {
+      return <p className="data-source">Cargando datos desde Firebase...</p>;
+    }
+
+    return (
+      <>
+        {dataSource === 'local' && <p className="data-source">Font de dades: Local</p>}
+        {dataError && <p className="login-error">{dataError}</p>}
+      </>
+    );
+  };
+
+  const renderRelationCards = (items, type) => (
+    <div className="detail-relations-grid">
+      {items.map((item) => (
+        <article
+          key={item.id}
+          className={`relation-card ${type === 'alumne' ? 'student-card' : 'restaurant-card'}`}
+        >
+          <img
+            src={item.imatge}
+            alt={item.nom}
+            className={type === 'alumne' ? 'student-image' : 'restaurant-thumb'}
+          />
+          <div>
+            <h3>{item.nom}</h3>
+            <p>{type === 'alumne' ? item.status : item.adreca}</p>
+            {type === 'alumne' && <p>{item.email || 'Sense email'}</p>}
+            <button
+              type="button"
+              className="details-button"
+              onClick={() =>
+                navigateToDetail(type === 'alumne' ? 'alumneDetail' : 'restaurantDetail', item)
+              }
+            >
+              Ver detalles
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+
+  const restaurantMapUrl = (restaurant) => {
+    if (!restaurant?.ubicacio) {
+      return '';
+    }
+
+    const { latitude, longitude } = restaurant.ubicacio;
+    const delta = 0.01;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - delta}%2C${latitude - delta}%2C${longitude + delta}%2C${latitude + delta}&layer=mapnik&marker=${latitude}%2C${longitude}`;
+  };
+
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${isDarkMode ? 'dark-mode' : ''}`}>
       <header className="app-header">
         <button
           type="button"
@@ -358,6 +589,15 @@ function App() {
           onClick={() => goToPage('inici')}
         >
           <img src="/logo_joviat.webp" alt="Logo Joviat" className="brand-logo" />
+        </button>
+
+        <button
+          type="button"
+          className="theme-toggle"
+          aria-label="Activar modo oscuro"
+          onClick={() => setIsDarkMode((current) => !current)}
+        >
+          {isDarkMode ? '☀️' : '🌙'}
         </button>
       </header>
 
@@ -386,24 +626,80 @@ function App() {
       )}
 
       <main className="main-content">
-        <p className="data-source">
-          Font de dades: {dataSource === 'firebase' ? 'Firebase' : 'Local'}
-        </p>
+        {renderDataStatus()}
         {authUser && <p className="auth-badge">Sessió iniciada: {authUser.email}</p>}
 
         {activePage === 'inici' && (
           <section>
             <h1>Benvinguts a Hostaleria Joviat</h1>
-            <p>Header responsive amb sidebar fixa en PC i desplegable en mòbil.</p>
+            <p>Dades carregades des de les col·leccions Alumni, Restaurant i Rest-Alum.</p>
+          </section>
+        )}
+
+        {activePage === 'signup' && (
+          <section className="detail-page login-panel">
+            <h2>SignUp</h2>
+            <form className="login-form" onSubmit={handleSignUp}>
+              <label>
+                Nombre
+                <input
+                  type="text"
+                  className="search-input"
+                  value={signUpForm.nom}
+                  onChange={(event) => handleSignUpChange('nom', event.target.value)}
+                />
+              </label>
+              <label>
+                PhotoURL
+                <input
+                  type="text"
+                  className="search-input"
+                  value={signUpForm.imatge}
+                  onChange={(event) => handleSignUpChange('imatge', event.target.value)}
+                />
+              </label>
+              <label>
+                Status
+                <input
+                  type="text"
+                  className="search-input"
+                  value={signUpForm.status}
+                  onChange={(event) => handleSignUpChange('status', event.target.value)}
+                />
+              </label>
+              <label>
+                Email *
+                <input
+                  type="email"
+                  className="search-input"
+                  value={signUpForm.email}
+                  onChange={(event) => handleSignUpChange('email', event.target.value)}
+                />
+              </label>
+              <label>
+                Password *
+                <input
+                  type="password"
+                  className="search-input"
+                  value={signUpForm.password}
+                  onChange={(event) => handleSignUpChange('password', event.target.value)}
+                />
+              </label>
+              {signUpError && <p className="login-error">{signUpError}</p>}
+              {signUpSuccess && <p className="auth-badge">{signUpSuccess}</p>}
+              <button type="submit" className="details-button" disabled={signUpLoading}>
+                {signUpLoading ? 'Registrando...' : 'Crear cuenta'}
+              </button>
+            </form>
           </section>
         )}
 
         {activePage === 'login' && (
           <section className="detail-page login-panel">
-            <h2>Login</h2>
+            <h2>Login administrador</h2>
             <form className="login-form" onSubmit={handleLogin}>
               <label>
-                Email
+                Email administrador
                 <input
                   type="email"
                   className="search-input"
@@ -411,65 +707,154 @@ function App() {
                   onChange={(event) => setLoginEmail(event.target.value)}
                 />
               </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  className="search-input"
-                  value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                />
-              </label>
               {loginError && <p className="login-error">{loginError}</p>}
               <button type="submit" className="details-button" disabled={loginLoading}>
-                {loginLoading ? 'Iniciant sessió...' : 'Entrar'}
+                {loginLoading ? 'Comprovant accés...' : 'Entrar'}
               </button>
             </form>
+          </section>
+        )}
+
+        {activePage === 'gestio' && authUser?.isAdmin && (
+          <section>
+            <h2>Gestión de perfiles</h2>
+            <p>Desde aquí puedes editar o borrar los alumni dados de alta.</p>
+            {managementError && <p className="login-error">{managementError}</p>}
+            {managementMessage && <p className="auth-badge">{managementMessage}</p>}
+            <div className="detail-relations-grid">
+              {alumnes.map((alumne) => (
+                <article key={alumne.id} className="detail-page management-card">
+                  <img src={alumne.imatge} alt={alumne.nom} className="detail-image" />
+                  {editingAlumneId === alumne.id ? (
+                    <div className="login-form">
+                      <label>
+                        Nombre
+                        <input
+                          type="text"
+                          className="search-input"
+                          value={editingForm.nom}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, nom: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        PhotoURL
+                        <input
+                          type="text"
+                          className="search-input"
+                          value={editingForm.imatge}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, imatge: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Status
+                        <input
+                          type="text"
+                          className="search-input"
+                          value={editingForm.status}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, status: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Email
+                        <input
+                          type="email"
+                          className="search-input"
+                          value={editingForm.email}
+                          onChange={(event) =>
+                            setEditingForm((current) => ({ ...current, email: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="details-button"
+                        onClick={() => handleSaveAlumne(alumne.id)}
+                      >
+                        Guardar cambios
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <h3>{alumne.nom}</h3>
+                      <p>{alumne.status}</p>
+                      <p>{alumne.email}</p>
+                      <div className="management-actions">
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() => startEditingAlumne(alumne)}
+                        >
+                          Editar perfil
+                        </button>
+                        <button
+                          type="button"
+                          className="back-button"
+                          onClick={() => handleDeleteAlumne(alumne.id)}
+                        >
+                          Borrar perfil
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
           </section>
         )}
 
         {activePage === 'alumnes' && (
           <section className="students-section">
             <h2>Visualitzar Alumnes</h2>
-            <p className="students-subtitle">Llistat d'alumnes</p>
+            <p className="students-subtitle">Llistat d'alumnes des de la col·lecció Alumni</p>
             <input
               type="search"
               className="search-input"
-              placeholder="Buscar alumne o rol"
+              placeholder="Buscar alumne, estat o email"
               aria-label="Buscar alumnes"
               value={searchAlumnes}
               onChange={(event) => setSearchAlumnes(event.target.value)}
             />
-            <div className="students-grid">
-              {filteredAlumnes.map((alumne) => {
-                const relatedRestaurants = (alumne.restaurantsIds || [])
-                  .map((restaurantId) => restaurantById[String(restaurantId)])
-                  .filter(Boolean);
+            {dataError ? (
+              <p className="login-error">{dataError}</p>
+            ) : (
+              <div className="students-grid">
+                {filteredAlumnes.map((alumne) => {
+                  const relatedRestaurants = (alumne.restaurantsIds || [])
+                    .map((restaurantId) => restaurantById[String(restaurantId)])
+                    .filter(Boolean);
 
-                return (
-                  <article className="student-card" key={alumne.id}>
-                    <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
-                    <div>
-                      <h3>{alumne.nom}</h3>
-                      <p>{alumne.rol}</p>
-                      <p className="relation-text">
-                        Restaurants:{' '}
-                        {relatedRestaurants.length
-                          ? relatedRestaurants.map((restaurant) => restaurant.nom).join(', ')
-                          : 'Sense dades'}
-                      </p>
-                      <button
-                        type="button"
-                        className="details-button"
-                        onClick={() => navigateToDetail('alumneDetail', alumne)}
-                      >
-                        Ver detalles
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                  return (
+                    <article className="student-card" key={alumne.id}>
+                      <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
+                      <div>
+                        <h3>{alumne.nom}</h3>
+                        <p>{alumne.status}</p>
+                        <p>{alumne.email || 'Sense email'}</p>
+                        <p className="relation-text">
+                          Restaurants:{' '}
+                          {relatedRestaurants.length
+                            ? relatedRestaurants.map((restaurant) => restaurant.nom).join(', ')
+                            : 'Sense dades'}
+                        </p>
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() => navigateToDetail('alumneDetail', alumne)}
+                        >
+                          Ver detalles
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -481,25 +866,18 @@ function App() {
             <h2>{selectedAlumne.nom}</h2>
             <img src={selectedAlumne.imatge} alt={selectedAlumne.nom} className="detail-image" />
             <p>
-              <strong>Rol:</strong> {selectedAlumne.rol}
+              <strong>Status:</strong> {selectedAlumne.status}
             </p>
-            <p>{selectedAlumne.bio}</p>
-            <h3>Restaurants on treballa o ha treballat</h3>
-            <div className="relation-buttons">
-              {(selectedAlumne.restaurantsIds || [])
+            <p>
+              <strong>Email:</strong> {selectedAlumne.email || 'Sense email'}
+            </p>
+            <h3>Restaurants vinculats</h3>
+            {renderRelationCards(
+              (selectedAlumne.restaurantsIds || [])
                 .map((restaurantId) => restaurantById[String(restaurantId)])
-                .filter(Boolean)
-                .map((restaurant) => (
-                  <button
-                    key={restaurant.id}
-                    type="button"
-                    className="link-button"
-                    onClick={() => navigateToDetail('restaurantDetail', restaurant)}
-                  >
-                    {restaurant.nom}
-                  </button>
-                ))}
-            </div>
+                .filter(Boolean),
+              'restaurant'
+            )}
           </section>
         )}
 
@@ -517,39 +895,43 @@ function App() {
             <input
               type="search"
               className="search-input"
-              placeholder="Buscar restaurant, especialitat o adreça"
+              placeholder="Buscar restaurant o adreça"
               aria-label="Buscar restaurants"
               value={searchRestaurants}
               onChange={(event) => setSearchRestaurants(event.target.value)}
             />
-            <div className="restaurants-grid">
-              {filteredRestaurants.map((restaurant) => {
-                const relatedAlumnes = (restaurant.alumnesIds || [])
-                  .map((alumneId) => alumneById[String(alumneId)])
-                  .filter(Boolean);
+            {dataError ? (
+              <p className="login-error">{dataError}</p>
+            ) : (
+              <div className="restaurants-grid">
+                {filteredRestaurants.map((restaurant) => {
+                  const relatedAlumnes = (restaurant.alumnesIds || [])
+                    .map((alumneId) => alumneById[String(alumneId)])
+                    .filter(Boolean);
 
-                return (
-                  <article className="restaurant-card" key={restaurant.id}>
-                    <h3>{restaurant.nom}</h3>
-                    <p>{restaurant.especialitat}</p>
-                    <small>{restaurant.adreca}</small>
-                    <p className="relation-text">
-                      Alumnes:{' '}
-                      {relatedAlumnes.length
-                        ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
-                        : 'Sense dades'}
-                    </p>
-                    <button
-                      type="button"
-                      className="details-button"
-                      onClick={() => navigateToDetail('restaurantDetail', restaurant)}
-                    >
-                      Ver detalles
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
+                  return (
+                    <article className="restaurant-card" key={restaurant.id}>
+                      <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
+                      <h3>{restaurant.nom}</h3>
+                      <p>{restaurant.adreca}</p>
+                      <p className="relation-text">
+                        Alumnes:{' '}
+                        {relatedAlumnes.length
+                          ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
+                          : 'Sense dades'}
+                      </p>
+                      <button
+                        type="button"
+                        className="details-button"
+                        onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                      >
+                        Ver detalles
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -559,29 +941,36 @@ function App() {
               ← Retroceder
             </button>
             <h2>{selectedRestaurant.nom}</h2>
-            <p>
-              <strong>Especialitat:</strong> {selectedRestaurant.especialitat}
-            </p>
+            <img
+              src={selectedRestaurant.imatge}
+              alt={selectedRestaurant.nom}
+              className="detail-image"
+            />
             <p>
               <strong>Adreça:</strong> {selectedRestaurant.adreca}
             </p>
-            <p>{selectedRestaurant.descripcio}</p>
-            <h3>Alumnes que hi treballen o han treballat</h3>
-            <div className="relation-buttons">
-              {(selectedRestaurant.alumnesIds || [])
+            {selectedRestaurant.ubicacio && (
+              <p>
+                <strong>Ubicació:</strong> {selectedRestaurant.ubicacio.latitude},{' '}
+                {selectedRestaurant.ubicacio.longitude}
+              </p>
+            )}
+            {selectedRestaurant.ubicacio && (
+              <div className="map-wrapper detail-map">
+                <iframe
+                  title={`Mapa de ${selectedRestaurant.nom}`}
+                  src={restaurantMapUrl(selectedRestaurant)}
+                  loading="lazy"
+                />
+              </div>
+            )}
+            <h3>Alumnes vinculats</h3>
+            {renderRelationCards(
+              (selectedRestaurant.alumnesIds || [])
                 .map((alumneId) => alumneById[String(alumneId)])
-                .filter(Boolean)
-                .map((alumne) => (
-                  <button
-                    key={alumne.id}
-                    type="button"
-                    className="link-button"
-                    onClick={() => navigateToDetail('alumneDetail', alumne)}
-                  >
-                    {alumne.nom}
-                  </button>
-                ))}
-            </div>
+                .filter(Boolean),
+              'alumne'
+            )}
           </section>
         )}
       </main>
