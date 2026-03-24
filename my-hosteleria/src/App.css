@@ -356,6 +356,77 @@ body {
   margin: 16px 0;
 }
 
+.admin-form-page {
+  margin-top: 10px;
+}
+
+.admin-label {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: #7c5d33;
+}
+
+.admin-title {
+  margin: 8px 0 6px;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+}
+
+.admin-subtitle {
+  margin: 0 0 16px;
+  color: #6b7280;
+}
+
+.admin-form-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-panel {
+  background: #ece8cc;
+  border-radius: 22px;
+  padding: 18px;
+}
+
+.admin-panel h4 {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.admin-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.admin-links-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.relation-editor {
+  background: rgba(255, 255, 255, 0.62);
+  border-radius: 18px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.relation-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.relation-editor-head h5 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
 .check-row {
   display: flex;
   align-items: center;
@@ -408,6 +479,14 @@ body {
   }
 
   .management-menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-form-layout {
+    grid-template-columns: 1fr 2fr;
+  }
+
+  .admin-grid-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

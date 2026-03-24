@@ -157,17 +157,15 @@ function App() {
     password: '',
     status: '',
     imatge: '',
-    restaurantId: '',
-    rol: '',
-    currentJob: false,
+    restaurantFilter: '',
+    links: [{ restaurantId: '', rol: '', currentJob: false }],
   });
   const [newRestaurantForm, setNewRestaurantForm] = useState({
     nom: '',
     adreca: '',
     imatge: '',
-    alumneId: '',
-    rol: '',
-    currentJob: false,
+    alumneFilter: '',
+    links: [{ alumneId: '', rol: '', currentJob: false }],
   });
 
   useEffect(() => {
@@ -597,6 +595,48 @@ function App() {
     }
   };
 
+  const addAlumneLink = () => {
+    setNewAlumneForm((current) => ({
+      ...current,
+      links: [...current.links, { restaurantId: '', rol: '', currentJob: false }],
+    }));
+  };
+
+  const removeAlumneLink = (index) => {
+    setNewAlumneForm((current) => ({
+      ...current,
+      links: current.links.length === 1 ? current.links : current.links.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateAlumneLink = (index, field, value) => {
+    setNewAlumneForm((current) => ({
+      ...current,
+      links: current.links.map((link, i) => (i === index ? { ...link, [field]: value } : link)),
+    }));
+  };
+
+  const addRestaurantLink = () => {
+    setNewRestaurantForm((current) => ({
+      ...current,
+      links: [...current.links, { alumneId: '', rol: '', currentJob: false }],
+    }));
+  };
+
+  const removeRestaurantLink = (index) => {
+    setNewRestaurantForm((current) => ({
+      ...current,
+      links: current.links.length === 1 ? current.links : current.links.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateRestaurantLink = (index, field, value) => {
+    setNewRestaurantForm((current) => ({
+      ...current,
+      links: current.links.map((link, i) => (i === index ? { ...link, [field]: value } : link)),
+    }));
+  };
+
   const handleCreateAlumneFromManagement = async (event) => {
     event.preventDefault();
     setManagementError('');
@@ -632,7 +672,7 @@ function App() {
         status: newAlumneForm.status.trim() || 'Nou registre',
         imatge: newAlumneForm.imatge.trim() || '/user_default',
         email: normalizedEmail,
-        restaurantsIds: newAlumneForm.restaurantId ? [newAlumneForm.restaurantId] : [],
+        restaurantsIds: newAlumneForm.links.map((link) => link.restaurantId).filter(Boolean),
         restaurantRoles: [],
       };
       const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
@@ -650,22 +690,26 @@ function App() {
         throw new Error(payload.error?.message || 'create-alumni-error');
       }
 
-      if (newAlumneForm.restaurantId) {
-        await createRelation({
-          alumniId: alumne.id,
-          restaurantId: newAlumneForm.restaurantId,
-          rol: newAlumneForm.rol.trim(),
-          currentJob: newAlumneForm.currentJob,
-        });
-      }
+      const validLinks = newAlumneForm.links.filter((link) => link.restaurantId);
+      await Promise.all(
+        validLinks.map((link) =>
+          createRelation({
+            alumniId: alumne.id,
+            restaurantId: link.restaurantId,
+            rol: link.rol.trim(),
+            currentJob: link.currentJob,
+          })
+        )
+      );
 
       setAlumnes((current) => [...current, alumne]);
       setRestaurants((current) =>
-        current.map((restaurant) =>
-          restaurant.id === newAlumneForm.restaurantId
+        current.map((restaurant) => {
+          const linked = validLinks.some((link) => link.restaurantId === restaurant.id);
+          return linked
             ? { ...restaurant, alumnesIds: [...restaurant.alumnesIds, alumne.id] }
-            : restaurant
-        )
+            : restaurant;
+        })
       );
       setNewAlumneForm({
         nom: '',
@@ -673,9 +717,8 @@ function App() {
         password: '',
         status: '',
         imatge: '',
-        restaurantId: '',
-        rol: '',
-        currentJob: false,
+        restaurantFilter: '',
+        links: [{ restaurantId: '', rol: '', currentJob: false }],
       });
       setManagementMessage('Alumno creado correctamente');
     } catch (error) {
@@ -699,7 +742,7 @@ function App() {
         nom: newRestaurantForm.nom.trim(),
         adreca: newRestaurantForm.adreca.trim() || 'Sense adreça',
         imatge: newRestaurantForm.imatge.trim() || '/restaurant_default',
-        alumnesIds: newRestaurantForm.alumneId ? [newRestaurantForm.alumneId] : [],
+        alumnesIds: newRestaurantForm.links.map((link) => link.alumneId).filter(Boolean),
         alumnesRoles: [],
       };
       const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
@@ -717,30 +760,31 @@ function App() {
       const restaurantId = payload?.name?.split('/').pop();
       const newRestaurant = { ...restaurant, id: restaurantId };
 
-      if (newRestaurantForm.alumneId) {
-        await createRelation({
-          alumniId: newRestaurantForm.alumneId,
-          restaurantId,
-          rol: newRestaurantForm.rol.trim(),
-          currentJob: newRestaurantForm.currentJob,
-        });
-      }
+      const validLinks = newRestaurantForm.links.filter((link) => link.alumneId);
+      await Promise.all(
+        validLinks.map((link) =>
+          createRelation({
+            alumniId: link.alumneId,
+            restaurantId,
+            rol: link.rol.trim(),
+            currentJob: link.currentJob,
+          })
+        )
+      );
 
       setRestaurants((current) => [...current, newRestaurant]);
       setAlumnes((current) =>
-        current.map((alumne) =>
-          alumne.id === newRestaurantForm.alumneId
-            ? { ...alumne, restaurantsIds: [...alumne.restaurantsIds, restaurantId] }
-            : alumne
-        )
+        current.map((alumne) => {
+          const linked = validLinks.some((link) => link.alumneId === alumne.id);
+          return linked ? { ...alumne, restaurantsIds: [...alumne.restaurantsIds, restaurantId] } : alumne;
+        })
       );
       setNewRestaurantForm({
         nom: '',
         adreca: '',
         imatge: '',
-        alumneId: '',
-        rol: '',
-        currentJob: false,
+        alumneFilter: '',
+        links: [{ alumneId: '', rol: '', currentJob: false }],
       });
       setManagementMessage('Restaurante creado correctamente');
     } catch (error) {
@@ -993,187 +1037,263 @@ function App() {
             </div>
 
             {managementPage === 'createAlumne' && (
-              <article className="detail-page">
-                <h3>Nuevo alumno</h3>
-                <form className="login-form" onSubmit={handleCreateAlumneFromManagement}>
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Nombre"
-                    value={newAlumneForm.nom}
-                    onChange={(event) =>
-                      setNewAlumneForm((current) => ({ ...current, nom: event.target.value }))
-                    }
-                  />
-                  <input
-                    type="email"
-                    className="search-input"
-                    placeholder="Email*"
-                    value={newAlumneForm.email}
-                    onChange={(event) =>
-                      setNewAlumneForm((current) => ({ ...current, email: event.target.value }))
-                    }
-                  />
-                  <input
-                    type="password"
-                    className="search-input"
-                    placeholder="Contraseña*"
-                    value={newAlumneForm.password}
-                    onChange={(event) =>
-                      setNewAlumneForm((current) => ({ ...current, password: event.target.value }))
-                    }
-                  />
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Status"
-                    value={newAlumneForm.status}
-                    onChange={(event) =>
-                      setNewAlumneForm((current) => ({ ...current, status: event.target.value }))
-                    }
-                  />
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="PhotoURL"
-                    value={newAlumneForm.imatge}
-                    onChange={(event) =>
-                      setNewAlumneForm((current) => ({ ...current, imatge: event.target.value }))
-                    }
-                  />
-                  <label>
-                    Vincular a restaurante
-                    <select
-                      className="search-input"
-                      value={newAlumneForm.restaurantId}
-                      onChange={(event) =>
-                        setNewAlumneForm((current) => ({
-                          ...current,
-                          restaurantId: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">Sin vínculo inicial</option>
-                      {restaurants.map((restaurant) => (
-                        <option key={restaurant.id} value={restaurant.id}>
-                          {restaurant.nom}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Rol en el restaurante"
-                    value={newAlumneForm.rol}
-                    onChange={(event) =>
-                      setNewAlumneForm((current) => ({ ...current, rol: event.target.value }))
-                    }
-                  />
-                  <label className="check-row">
+              <section className="admin-form-page">
+                <p className="admin-label">ADMINISTRACIO</p>
+                <h3 className="admin-title">Afegir Alumne</h3>
+                <p className="admin-subtitle">
+                  Dona d'alta un alumne nou i relaciona'l amb tants restaurants com calgui.
+                </p>
+                <form className="admin-form-layout" onSubmit={handleCreateAlumneFromManagement}>
+                  <article className="admin-panel">
+                    <h4>Informacio primaria</h4>
                     <input
-                      type="checkbox"
-                      checked={newAlumneForm.currentJob}
+                      type="text"
+                      className="search-input"
+                      placeholder="Nom complet"
+                      value={newAlumneForm.nom}
+                      onChange={(event) =>
+                        setNewAlumneForm((current) => ({ ...current, nom: event.target.value }))
+                      }
+                    />
+                    <div className="admin-grid-2">
+                      <input
+                        type="email"
+                        className="search-input"
+                        placeholder="Correu electronic*"
+                        value={newAlumneForm.email}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, email: event.target.value }))
+                        }
+                      />
+                      <input
+                        type="password"
+                        className="search-input"
+                        placeholder="Contrasenya*"
+                        value={newAlumneForm.password}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, password: event.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="admin-grid-2">
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Photo URL"
+                        value={newAlumneForm.imatge}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, imatge: event.target.value }))
+                        }
+                      />
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Estat de l'alumne"
+                        value={newAlumneForm.status}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, status: event.target.value }))
+                        }
+                      />
+                    </div>
+                  </article>
+
+                  <article className="admin-panel">
+                    <div className="admin-links-header">
+                      <h4>Trajectoria professional · Restaurants</h4>
+                      <button type="button" className="back-button" onClick={addAlumneLink}>
+                        Afegir restaurant
+                      </button>
+                    </div>
+                    <input
+                      type="search"
+                      className="search-input"
+                      placeholder="Filtrar restaurants pel nom"
+                      value={newAlumneForm.restaurantFilter}
                       onChange={(event) =>
                         setNewAlumneForm((current) => ({
                           ...current,
-                          currentJob: event.target.checked,
+                          restaurantFilter: event.target.value,
                         }))
                       }
                     />
-                    Trabajando actualmente
-                  </label>
-                  <button type="submit" className="details-button">
-                    Crear alumno
-                  </button>
+                    {newAlumneForm.links.map((link, index) => (
+                      <div className="relation-editor" key={`alumne-link-${index}`}>
+                        <div className="relation-editor-head">
+                          <h5>Restaurant {index + 1}</h5>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => removeAlumneLink(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <select
+                          className="search-input"
+                          value={link.restaurantId}
+                          onChange={(event) => updateAlumneLink(index, 'restaurantId', event.target.value)}
+                        >
+                          <option value="">Selecciona un restaurant</option>
+                          {restaurants
+                            .filter((restaurant) =>
+                              restaurant.nom
+                                .toLowerCase()
+                                .includes(newAlumneForm.restaurantFilter.trim().toLowerCase())
+                            )
+                            .map((restaurant) => (
+                              <option key={restaurant.id} value={restaurant.id}>
+                                {restaurant.nom}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          type="text"
+                          className="search-input"
+                          placeholder="Rol"
+                          value={link.rol}
+                          onChange={(event) => updateAlumneLink(index, 'rol', event.target.value)}
+                        />
+                        <label className="check-row">
+                          <input
+                            type="checkbox"
+                            checked={link.currentJob}
+                            onChange={(event) =>
+                              updateAlumneLink(index, 'currentJob', event.target.checked)
+                            }
+                          />
+                          Esta treballant actualment en aquest restaurant
+                        </label>
+                      </div>
+                    ))}
+                    <button type="submit" className="details-button">
+                      Crear alumne
+                    </button>
+                  </article>
                 </form>
-              </article>
+              </section>
             )}
 
             {managementPage === 'createRestaurant' && (
-              <article className="detail-page">
-                <h3>Nuevo restaurante</h3>
-                <form className="login-form" onSubmit={handleCreateRestaurant}>
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Nombre*"
-                    value={newRestaurantForm.nom}
-                    onChange={(event) =>
-                      setNewRestaurantForm((current) => ({ ...current, nom: event.target.value }))
-                    }
-                  />
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Dirección"
-                    value={newRestaurantForm.adreca}
-                    onChange={(event) =>
-                      setNewRestaurantForm((current) => ({
-                        ...current,
-                        adreca: event.target.value,
-                      }))
-                    }
-                  />
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="PhotoURL"
-                    value={newRestaurantForm.imatge}
-                    onChange={(event) =>
-                      setNewRestaurantForm((current) => ({
-                        ...current,
-                        imatge: event.target.value,
-                      }))
-                    }
-                  />
-                  <label>
-                    Vincular con alumno
-                    <select
-                      className="search-input"
-                      value={newRestaurantForm.alumneId}
-                      onChange={(event) =>
-                        setNewRestaurantForm((current) => ({
-                          ...current,
-                          alumneId: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">Sin vínculo inicial</option>
-                      {alumnes.map((alumne) => (
-                        <option key={alumne.id} value={alumne.id}>
-                          {alumne.nom}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Rol del alumno"
-                    value={newRestaurantForm.rol}
-                    onChange={(event) =>
-                      setNewRestaurantForm((current) => ({ ...current, rol: event.target.value }))
-                    }
-                  />
-                  <label className="check-row">
+              <section className="admin-form-page">
+                <p className="admin-label">ADMINISTRACIO</p>
+                <h3 className="admin-title">Afegir Restaurant</h3>
+                <p className="admin-subtitle">
+                  Dona d'alta un restaurant nou i relaciona'l amb tants alumnes com calgui.
+                </p>
+                <form className="admin-form-layout" onSubmit={handleCreateRestaurant}>
+                  <article className="admin-panel">
+                    <h4>Informacio primaria</h4>
                     <input
-                      type="checkbox"
-                      checked={newRestaurantForm.currentJob}
+                      type="text"
+                      className="search-input"
+                      placeholder="Nom del restaurant*"
+                      value={newRestaurantForm.nom}
+                      onChange={(event) =>
+                        setNewRestaurantForm((current) => ({ ...current, nom: event.target.value }))
+                      }
+                    />
+                    <div className="admin-grid-2">
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Adreca"
+                        value={newRestaurantForm.adreca}
+                        onChange={(event) =>
+                          setNewRestaurantForm((current) => ({
+                            ...current,
+                            adreca: event.target.value,
+                          }))
+                        }
+                      />
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Photo URL"
+                        value={newRestaurantForm.imatge}
+                        onChange={(event) =>
+                          setNewRestaurantForm((current) => ({
+                            ...current,
+                            imatge: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </article>
+
+                  <article className="admin-panel">
+                    <div className="admin-links-header">
+                      <h4>Trajectoria professional · Alumnes</h4>
+                      <button type="button" className="back-button" onClick={addRestaurantLink}>
+                        Afegir alumne
+                      </button>
+                    </div>
+                    <input
+                      type="search"
+                      className="search-input"
+                      placeholder="Filtrar alumnes pel nom"
+                      value={newRestaurantForm.alumneFilter}
                       onChange={(event) =>
                         setNewRestaurantForm((current) => ({
                           ...current,
-                          currentJob: event.target.checked,
+                          alumneFilter: event.target.value,
                         }))
                       }
                     />
-                    Está trabajando actualmente
-                  </label>
-                  <button type="submit" className="details-button">
-                    Crear restaurante
-                  </button>
+                    {newRestaurantForm.links.map((link, index) => (
+                      <div className="relation-editor" key={`restaurant-link-${index}`}>
+                        <div className="relation-editor-head">
+                          <h5>Alumne {index + 1}</h5>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => removeRestaurantLink(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <select
+                          className="search-input"
+                          value={link.alumneId}
+                          onChange={(event) => updateRestaurantLink(index, 'alumneId', event.target.value)}
+                        >
+                          <option value="">Selecciona un alumne</option>
+                          {alumnes
+                            .filter((alumne) =>
+                              alumne.nom
+                                .toLowerCase()
+                                .includes(newRestaurantForm.alumneFilter.trim().toLowerCase())
+                            )
+                            .map((alumne) => (
+                              <option key={alumne.id} value={alumne.id}>
+                                {alumne.nom}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          type="text"
+                          className="search-input"
+                          placeholder="Rol"
+                          value={link.rol}
+                          onChange={(event) => updateRestaurantLink(index, 'rol', event.target.value)}
+                        />
+                        <label className="check-row">
+                          <input
+                            type="checkbox"
+                            checked={link.currentJob}
+                            onChange={(event) =>
+                              updateRestaurantLink(index, 'currentJob', event.target.checked)
+                            }
+                          />
+                          Esta treballant actualment en aquest restaurant
+                        </label>
+                      </div>
+                    ))}
+                    <button type="submit" className="details-button">
+                      Crear restaurant
+                    </button>
+                  </article>
                 </form>
-              </article>
+              </section>
             )}
 
             {managementPage === 'manageAlumnes' && (
