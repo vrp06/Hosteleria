@@ -349,6 +349,13 @@ body {
   margin-bottom: 18px;
 }
 
+.management-menu-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 16px 0;
+}
+
 .check-row {
   display: flex;
   align-items: center;
@@ -372,6 +379,14 @@ body {
   min-height: 280px;
 }
 
+.card-map {
+  margin: 0 0 8px;
+}
+
+.card-map iframe {
+  min-height: 180px;
+}
+
 @media (min-width: 768px) {
   .app-header {
     padding: 0 24px;
@@ -389,6 +404,10 @@ body {
   }
 
   .management-create-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .management-menu-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

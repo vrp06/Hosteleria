@@ -1,18 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-} from 'firebase/auth';
 import './App.css';
-import { auth, getFirebaseConfig, hasFirebaseConfig } from './firebase';
+import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
 
 const baseNavItems = [
   { key: 'inici', label: 'Inici' },
   { key: 'alumnes', label: 'Visualitzar Alumnes' },
   { key: 'restaurants', label: 'Restaurants' },
-  { key: 'signup', label: 'SignUp' },
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
@@ -157,6 +150,7 @@ function App() {
   const [editingForm, setEditingForm] = useState({ nom: '', imatge: '', status: '', email: '' });
   const [managementMessage, setManagementMessage] = useState('');
   const [managementError, setManagementError] = useState('');
+  const [managementPage, setManagementPage] = useState('menu');
   const [newAlumneForm, setNewAlumneForm] = useState({
     nom: '',
     email: '',
@@ -259,24 +253,6 @@ function App() {
     loadFirebaseData();
   }, []);
 
-  useEffect(() => {
-    if (!auth) {
-      return undefined;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (!firebaseUser?.email) {
-        setAuthUser(null);
-        return;
-      }
-
-      const normalizedEmail = firebaseUser.email.trim().toLowerCase();
-      setAuthUser({ email: normalizedEmail, isAdmin: adminEmails.includes(normalizedEmail) });
-    });
-
-    return unsubscribe;
-  }, [adminEmails]);
-
   const restaurantById = useMemo(
     () => Object.fromEntries(restaurants.map((restaurant) => [String(restaurant.id), restaurant])),
     [restaurants]
@@ -288,6 +264,9 @@ function App() {
 
   const navItems = useMemo(() => {
     const items = [...baseNavItems];
+    if (!authUser) {
+      items.push({ key: 'signup', label: 'SignUp' });
+    }
     if (authUser?.isAdmin) {
       items.push({ key: 'gestio', label: 'Gestión' });
     }
@@ -303,21 +282,21 @@ function App() {
 
   const goToPage = async (page) => {
     if (page === 'logout') {
-      if (auth) {
-        await signOut(auth);
-      } else {
-        setAuthUser(null);
-      }
+      setAuthUser(null);
       setLoginError('');
       setLoginPassword('');
       setManagementMessage('');
       setManagementError('');
+      setManagementPage('menu');
       setActivePage('inici');
       setPageHistory([]);
       closeSidebarOnMobile();
       return;
     }
 
+    if (page === 'gestio') {
+      setManagementPage('menu');
+    }
     setActivePage(page);
     closeSidebarOnMobile();
   };
@@ -389,7 +368,7 @@ function App() {
     event.preventDefault();
     setLoginError('');
 
-    if (!hasFirebaseConfig || !auth) {
+    if (!hasFirebaseConfig) {
       setLoginError('Falta configurar Firebase en src/firebase.js o variables REACT_APP_FIREBASE_*');
       return;
     }
@@ -403,7 +382,24 @@ function App() {
     setLoginLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, normalizedEmail, loginPassword);
+      const config = getFirebaseConfig();
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: loginPassword,
+            returnSecureToken: true,
+          }),
+        }
+      );
+      const authPayload = await authResponse.json();
+      if (!authResponse.ok) {
+        throw new Error(authPayload.error?.message || 'signin-auth-error');
+      }
+      setAuthUser({ email: normalizedEmail, isAdmin: adminEmails.includes(normalizedEmail) });
       setLoginPassword('');
       setActivePage('inici');
     } catch (_error) {
@@ -422,7 +418,7 @@ function App() {
     setSignUpError('');
     setSignUpSuccess('');
 
-    if (!auth || !hasFirebaseConfig) {
+    if (!hasFirebaseConfig) {
       setSignUpError('Firebase Auth no está configurado');
       return;
     }
@@ -438,14 +434,25 @@ function App() {
     setSignUpLoading(true);
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        normalizedEmail,
-        signUpForm.password
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: signUpForm.password,
+            returnSecureToken: true,
+          }),
+        }
       );
+      const authPayload = await authResponse.json();
+      if (!authResponse.ok) {
+        throw new Error(authPayload.error?.message || 'signup-auth-error');
+      }
 
       const profile = {
-        id: userCredential.user.uid,
+        id: authPayload.localId,
         nom: signUpForm.nom.trim() || normalizedEmail.split('@')[0],
         status: signUpForm.status.trim() || 'Nou registre',
         imatge: signUpForm.imatge.trim() || '/user_default',
@@ -456,7 +463,7 @@ function App() {
 
       const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
       const profileResponse = await fetch(
-        `${baseUrl}/${config.alumniCollection}?documentId=${userCredential.user.uid}&key=${config.apiKey}`,
+        `${baseUrl}/${config.alumniCollection}?documentId=${authPayload.localId}&key=${config.apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -958,15 +965,34 @@ function App() {
 
         {activePage === 'gestio' && authUser?.isAdmin && (
           <section>
-            <h2>Gestión de perfiles y restaurantes</h2>
-            <p>
-              Desde aquí puedes crear alumnos y restaurantes, vincularlos, y marcar si han trabajado o
-              trabajan actualmente.
-            </p>
+            <h2>Gestión</h2>
+            <p>Selecciona la acción que quieres realizar.</p>
             {managementError && <p className="login-error">{managementError}</p>}
             {managementMessage && <p className="auth-badge">{managementMessage}</p>}
+            <div className="management-menu-grid">
+              <button type="button" className="details-button" onClick={() => setManagementPage('createAlumne')}>
+                Crear alumnos
+              </button>
+              <button
+                type="button"
+                className="details-button"
+                onClick={() => setManagementPage('createRestaurant')}
+              >
+                Crear restaurantes
+              </button>
+              <button type="button" className="details-button" onClick={() => setManagementPage('manageAlumnes')}>
+                Gestionar alumnos
+              </button>
+              <button
+                type="button"
+                className="details-button"
+                onClick={() => setManagementPage('manageRestaurants')}
+              >
+                Gestionar restaurantes
+              </button>
+            </div>
 
-            <div className="management-create-grid">
+            {managementPage === 'createAlumne' && (
               <article className="detail-page">
                 <h3>Nuevo alumno</h3>
                 <form className="login-form" onSubmit={handleCreateAlumneFromManagement}>
@@ -1062,7 +1088,9 @@ function App() {
                   </button>
                 </form>
               </article>
+            )}
 
+            {managementPage === 'createRestaurant' && (
               <article className="detail-page">
                 <h3>Nuevo restaurante</h3>
                 <form className="login-form" onSubmit={handleCreateRestaurant}>
@@ -1146,110 +1174,113 @@ function App() {
                   </button>
                 </form>
               </article>
-            </div>
+            )}
 
-            <h3>Alumnos</h3>
-            <div className="detail-relations-grid">
-              {alumnes.map((alumne) => (
-                <article key={alumne.id} className="detail-page management-card">
-                  <img src={alumne.imatge} alt={alumne.nom} className="detail-image" />
-                  {editingAlumneId === alumne.id ? (
-                    <div className="login-form">
-                      <label>
-                        Nombre
-                        <input
-                          type="text"
-                          className="search-input"
-                          value={editingForm.nom}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, nom: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        PhotoURL
-                        <input
-                          type="text"
-                          className="search-input"
-                          value={editingForm.imatge}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, imatge: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Status
-                        <input
-                          type="text"
-                          className="search-input"
-                          value={editingForm.status}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, status: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Email
-                        <input
-                          type="email"
-                          className="search-input"
-                          value={editingForm.email}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, email: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="details-button"
-                        onClick={() => handleSaveAlumne(alumne.id)}
-                      >
-                        Guardar cambios
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <h3>{alumne.nom}</h3>
-                      <p>{alumne.status}</p>
-                      <p>{alumne.email}</p>
-                      <div className="management-actions">
+            {managementPage === 'manageAlumnes' && (
+              <div className="detail-relations-grid">
+                {alumnes.map((alumne) => (
+                  <article key={alumne.id} className="detail-page management-card">
+                    <img src={alumne.imatge} alt={alumne.nom} className="detail-image" />
+                    {editingAlumneId === alumne.id ? (
+                      <div className="login-form">
+                        <label>
+                          Nombre
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingForm.nom}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, nom: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          PhotoURL
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingForm.imatge}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, imatge: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Status
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingForm.status}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, status: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Email
+                          <input
+                            type="email"
+                            className="search-input"
+                            value={editingForm.email}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, email: event.target.value }))
+                            }
+                          />
+                        </label>
                         <button
                           type="button"
                           className="details-button"
-                          onClick={() => startEditingAlumne(alumne)}
+                          onClick={() => handleSaveAlumne(alumne.id)}
                         >
-                          Editar perfil
-                        </button>
-                        <button
-                          type="button"
-                          className="back-button"
-                          onClick={() => handleDeleteAlumne(alumne.id)}
-                        >
-                          Borrar perfil
+                          Guardar cambios
                         </button>
                       </div>
-                    </>
-                  )}
-                </article>
-              ))}
-            </div>
-            <h3>Restaurantes</h3>
-            <div className="detail-relations-grid">
-              {restaurants.map((restaurant) => (
-                <article key={restaurant.id} className="detail-page management-card">
-                  <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
-                  <h3>{restaurant.nom}</h3>
-                  <p>{restaurant.adreca}</p>
-                  <p>
-                    Alumnos vinculados:{' '}
-                    {(restaurant.alumnesIds || [])
-                      .map((id) => alumneById[String(id)]?.nom)
-                      .filter(Boolean)
-                      .join(', ') || 'Sin datos'}
-                  </p>
-                </article>
-              ))}
-            </div>
+                    ) : (
+                      <>
+                        <h3>{alumne.nom}</h3>
+                        <p>{alumne.status}</p>
+                        <p>{alumne.email}</p>
+                        <div className="management-actions">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => startEditingAlumne(alumne)}
+                          >
+                            Editar perfil
+                          </button>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => handleDeleteAlumne(alumne.id)}
+                          >
+                            Borrar perfil
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {managementPage === 'manageRestaurants' && (
+              <div className="detail-relations-grid">
+                {restaurants.map((restaurant) => (
+                  <article key={restaurant.id} className="detail-page management-card">
+                    <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
+                    <h3>{restaurant.nom}</h3>
+                    <p>{restaurant.adreca}</p>
+                    <p>
+                      Alumnos vinculados:{' '}
+                      {(restaurant.alumnesIds || [])
+                        .map((id) => alumneById[String(id)]?.nom)
+                        .filter(Boolean)
+                        .join(', ') || 'Sin datos'}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -1356,6 +1387,15 @@ function App() {
 
                   return (
                     <article className="restaurant-card" key={restaurant.id}>
+                      {restaurant.ubicacio && (
+                        <div className="map-wrapper card-map">
+                          <iframe
+                            title={`Mapa de ${restaurant.nom}`}
+                            src={restaurantMapUrl(restaurant)}
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
                       <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
                       <h3>{restaurant.nom}</h3>
                       <p>{restaurant.adreca}</p>

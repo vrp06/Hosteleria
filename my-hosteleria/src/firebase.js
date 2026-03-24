@@ -1,6 +1,3 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-
 const rawFirebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'AIzaSyBpx_szcDUPmXWI_zHL3JuPQSBEiUC7K8E',
   authDomain:
@@ -31,17 +28,11 @@ export const hasFirebaseConfig = requiredConfigKeys.every(
   (key) => typeof rawFirebaseConfig[key] === 'string' && rawFirebaseConfig[key].trim() !== ''
 );
 
-const firebaseApp = hasFirebaseConfig
-  ? getApps().length > 0
-    ? getApp()
-    : initializeApp(rawFirebaseConfig)
-  : null;
-
-export const app = firebaseApp;
-export const auth = firebaseApp ? getAuth(firebaseApp) : null;
+export const app = null;
 export const getFirebaseConfig = () => ({
   ...rawFirebaseConfig,
   ...collectionConfig,
 });
 
+const firebaseApp = app;
 export default firebaseApp;
