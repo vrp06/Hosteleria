@@ -266,7 +266,9 @@ function App() {
       items.push({ key: 'signup', label: 'SignUp' });
     }
     if (authUser?.isAdmin) {
-      items.push({ key: 'gestio', label: 'Gestión' });
+      items.push({ key: 'addAlumnes', label: 'Agregar Alumnos' });
+      items.push({ key: 'addRestaurants', label: 'Agregar Restaurantes' });
+      items.push({ key: 'generateOthers', label: 'Generar Otros' });
     }
     items.push({ key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' });
     return items;
@@ -294,6 +296,27 @@ function App() {
 
     if (page === 'gestio') {
       setManagementPage('menu');
+    }
+
+    if (page === 'addAlumnes') {
+      setManagementPage('createAlumne');
+      setActivePage('gestio');
+      closeSidebarOnMobile();
+      return;
+    }
+
+    if (page === 'addRestaurants') {
+      setManagementPage('createRestaurant');
+      setActivePage('gestio');
+      closeSidebarOnMobile();
+      return;
+    }
+
+    if (page === 'generateOthers') {
+      setManagementPage('generateOthers');
+      setActivePage('gestio');
+      closeSidebarOnMobile();
+      return;
     }
     setActivePage(page);
     closeSidebarOnMobile();
@@ -1405,6 +1428,16 @@ function App() {
                   </article>
                 ))}
               </div>
+            )}
+
+            {managementPage === 'generateOthers' && (
+              <article className="detail-page">
+                <h3>Generar Otros</h3>
+                <p>
+                  Aquí podrás añadir utilidades adicionales de administración (informes, exportaciones o
+                  procesos masivos).
+                </p>
+              </article>
             )}
           </section>
         )}

@@ -167,6 +167,10 @@ body {
   font-weight: 700;
 }
 
+.app-layout.dark-mode .auth-badge {
+  color: #111827;
+}
+
 .login-panel {
   max-width: 420px;
 }
