@@ -3,9 +3,9 @@ import './App.css';
 import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
 
 const baseNavItems = [
-  { key: 'inici', label: 'Inici' },
-  { key: 'alumnes', label: 'Visualitzar Alumnes' },
-  { key: 'restaurants', label: 'Restaurants' },
+  { key: 'inici' },
+  { key: 'alumnes' },
+  { key: 'restaurants' },
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
@@ -129,7 +129,6 @@ function App() {
   const [dataSource, setDataSource] = useState('firebase');
   const [dataError, setDataError] = useState('');
   const [dataLoading, setDataLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [selectedLanguage, setSelectedLanguage] = useState('ca');
   const [adminEmails, setAdminEmails] = useState([]);
@@ -185,6 +184,28 @@ function App() {
           homeDesc: "Connecta amb alumni i establiments que mantenen viu el talent format a l'escola.",
           exploreRestaurants: 'Explorar establiments',
           exploreAlumnes: 'Explorar alumnes',
+          home: 'Inici',
+          students: 'Alumnes',
+          restaurants: 'Restaurants',
+          signup: 'Registre',
+          login: 'Login',
+          logout: 'Logout',
+          editProfile: 'Editar perfil',
+          addStudents: 'Afegir alumnes',
+          addRestaurants: 'Afegir restaurants',
+          generateOthers: 'Generar altres',
+          language: 'Idioma',
+          loginTitle: 'Iniciar sessió',
+          email: 'Correu',
+          password: 'Contrasenya',
+          requestAccess: 'Sol·licitar accés',
+          fullName: 'Nom i cognoms',
+          sendRequest: 'Enviar sol·licitud',
+          listMode: 'Mode llistat',
+          mapMode: 'Mode mapa',
+          previous: 'Anterior',
+          next: 'Següent',
+          page: 'Pàgina',
         },
         es: {
           subtitle: 'Ciclo formativo hostelería',
@@ -192,6 +213,28 @@ function App() {
           homeDesc: 'Conecta con alumni y establecimientos que mantienen vivo el talento formado.',
           exploreRestaurants: 'Explorar establecimientos',
           exploreAlumnes: 'Explorar alumnos',
+          home: 'Inicio',
+          students: 'Alumnos',
+          restaurants: 'Restaurantes',
+          signup: 'Registro',
+          login: 'Login',
+          logout: 'Logout',
+          editProfile: 'Editar perfil',
+          addStudents: 'Agregar alumnos',
+          addRestaurants: 'Agregar restaurantes',
+          generateOthers: 'Generar otros',
+          language: 'Idioma',
+          loginTitle: 'Iniciar sesión',
+          email: 'Email',
+          password: 'Contraseña',
+          requestAccess: 'Solicitar acceso',
+          fullName: 'Nombre y apellidos',
+          sendRequest: 'Enviar solicitud',
+          listMode: 'Modo listado',
+          mapMode: 'Modo mapa',
+          previous: 'Anterior',
+          next: 'Siguiente',
+          page: 'Página',
         },
         en: {
           subtitle: 'Hospitality training programme',
@@ -199,6 +242,28 @@ function App() {
           homeDesc: 'Connect with alumni and venues that keep trained talent alive.',
           exploreRestaurants: 'Explore venues',
           exploreAlumnes: 'Explore alumni',
+          home: 'Home',
+          students: 'Students',
+          restaurants: 'Restaurants',
+          signup: 'Sign up',
+          login: 'Login',
+          logout: 'Logout',
+          editProfile: 'Edit profile',
+          addStudents: 'Add students',
+          addRestaurants: 'Add restaurants',
+          generateOthers: 'Generate others',
+          language: 'Language',
+          loginTitle: 'Sign in',
+          email: 'Email',
+          password: 'Password',
+          requestAccess: 'Request access',
+          fullName: 'Full name',
+          sendRequest: 'Send request',
+          listMode: 'List mode',
+          mapMode: 'Map mode',
+          previous: 'Previous',
+          next: 'Next',
+          page: 'Page',
         },
       })[selectedLanguage],
     [selectedLanguage]
@@ -309,20 +374,28 @@ function App() {
   );
 
   const navItems = useMemo(() => {
-    const items = [...baseNavItems];
+    const labelsByKey = {
+      inici: languageText.home,
+      alumnes: languageText.students,
+      restaurants: languageText.restaurants,
+    };
+    const items = baseNavItems.map((item) => ({ ...item, label: labelsByKey[item.key] || item.key }));
     if (!authUser) {
-      items.push({ key: 'signup', label: 'SignUp' });
+      items.push({ key: 'signup', label: languageText.signup });
     }
     if (authUser?.isAdmin) {
-      items.push({ key: 'addAlumnes', label: 'Agregar Alumnos' });
-      items.push({ key: 'addRestaurants', label: 'Agregar Restaurantes' });
-      items.push({ key: 'generateOthers', label: 'Generar Otros' });
+      items.push({ key: 'addAlumnes', label: languageText.addStudents });
+      items.push({ key: 'addRestaurants', label: languageText.addRestaurants });
+      items.push({ key: 'generateOthers', label: languageText.generateOthers });
     } else if (authUser) {
-      items.push({ key: 'editProfile', label: 'Editar perfil' });
+      items.push({ key: 'editProfile', label: languageText.editProfile });
     }
-    items.push({ key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' });
+    items.push({
+      key: authUser ? 'logout' : 'login',
+      label: authUser ? languageText.logout : languageText.login,
+    });
     return items;
-  }, [authUser]);
+  }, [authUser, languageText]);
 
   const closeSidebarOnMobile = () => {
     if (window.innerWidth < 1024) {
@@ -999,7 +1072,7 @@ function App() {
   };
 
   return (
-    <div className={`app-layout ${isDarkMode ? 'dark-mode' : ''}`}>
+    <div className="app-layout">
       <header className="app-header">
         <button
           type="button"
@@ -1031,14 +1104,6 @@ function App() {
           </div>
         )}
 
-        <button
-          type="button"
-          className="theme-toggle"
-          aria-label="Activar modo oscuro"
-          onClick={() => setIsDarkMode((current) => !current)}
-        >
-          {isDarkMode ? '☀️' : '🌙'}
-        </button>
       </header>
 
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
@@ -1054,7 +1119,7 @@ function App() {
             </button>
           ))}
           <div className="language-picker">
-            <span>Idioma</span>
+            <span>{languageText.language}</span>
             <div className={`language-switch lang-${selectedLanguage}`}>
               <button type="button" onClick={() => setSelectedLanguage('ca')}>
                 CA
@@ -1081,7 +1146,7 @@ function App() {
 
       <main className="main-content">
         {renderDataStatus()}
-        {authUser && <p className="auth-badge">Sessió iniciada</p>}
+        {authUser && <p className="auth-badge">{languageText.loginTitle}</p>}
 
         {activePage === 'inici' && (
           <section className="home-hero">
@@ -1161,10 +1226,10 @@ function App() {
 
         {activePage === 'login' && (
           <section className="detail-page login-panel">
-            <h2>Login con Firebase Auth</h2>
-            <form className="login-form" onSubmit={handleLogin}>
-              <label>
-                Email
+              <h2>{languageText.loginTitle}</h2>
+              <form className="login-form" onSubmit={handleLogin}>
+                <label>
+                  {languageText.email}
                 <input
                   type="email"
                   className="search-input"
@@ -1173,7 +1238,7 @@ function App() {
                 />
               </label>
               <label>
-                Contraseña
+                  {languageText.password}
                 <input
                   type="password"
                   className="search-input"
@@ -1189,18 +1254,18 @@ function App() {
               <button type="submit" className="details-button" disabled={loginLoading}>
                 {loginLoading ? 'Comprovant accés...' : 'Entrar'}
               </button>
-              <button
-                type="button"
-                className="back-button"
-                onClick={() => setShowRequestAccess((current) => !current)}
-              >
-                Sol·licitar accés
-              </button>
-            </form>
+                <button
+                  type="button"
+                  className="back-button"
+                  onClick={() => setShowRequestAccess((current) => !current)}
+                >
+                  {languageText.requestAccess}
+                </button>
+              </form>
             {showRequestAccess && (
               <form className="login-form" onSubmit={handleRequestAccess}>
                 <label>
-                  Email
+                  {languageText.email}
                   <input
                     type="email"
                     className="search-input"
@@ -1211,7 +1276,7 @@ function App() {
                   />
                 </label>
                 <label>
-                  Nom i cognoms
+                  {languageText.fullName}
                   <input
                     type="text"
                     className="search-input"
@@ -1224,7 +1289,7 @@ function App() {
                 {requestAccessError && <p className="login-error">{requestAccessError}</p>}
                 {requestAccessSuccess && <p className="auth-badge">{requestAccessSuccess}</p>}
                 <button type="submit" className="details-button">
-                  Enviar solicitud
+                  {languageText.sendRequest}
                 </button>
               </form>
             )}
@@ -1780,14 +1845,14 @@ function App() {
                 className={restaurantsView === 'list' ? 'details-button' : 'back-button'}
                 onClick={() => setRestaurantsView('list')}
               >
-                Mode llistat
+                {languageText.listMode}
               </button>
               <button
                 type="button"
                 className={restaurantsView === 'map' ? 'details-button' : 'back-button'}
                 onClick={() => setRestaurantsView('map')}
               >
-                Mode mapa
+                {languageText.mapMode}
               </button>
             </div>
             <input
@@ -1862,10 +1927,10 @@ function App() {
                         disabled={restaurantsPage === 1}
                         onClick={() => setRestaurantsPage((current) => Math.max(1, current - 1))}
                       >
-                        Anterior
+                        {languageText.previous}
                       </button>
                       <span>
-                        Página {restaurantsPage} de {totalRestaurantPages}
+                        {languageText.page} {restaurantsPage} / {totalRestaurantPages}
                       </span>
                       <button
                         type="button"
@@ -1875,7 +1940,7 @@ function App() {
                           setRestaurantsPage((current) => Math.min(totalRestaurantPages, current + 1))
                         }
                       >
-                        Siguiente
+                        {languageText.next}
                       </button>
                     </div>
                   </>
