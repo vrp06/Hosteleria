@@ -34,7 +34,6 @@ body {
 }
 
 .theme-toggle {
-  margin-left: auto;
   width: 44px;
   height: 44px;
   border: none;
@@ -43,6 +42,23 @@ body {
   color: #f9fafb;
   font-size: 1.1rem;
   cursor: pointer;
+}
+
+.user-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.user-chip-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e7eb;
 }
 
 .menu-toggle {
@@ -105,6 +121,12 @@ body {
   gap: 12px;
 }
 
+.language-picker {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+}
+
 .nav-link {
   border: none;
   background: transparent;
@@ -143,6 +165,19 @@ body {
   padding: 24px 16px 42px;
   max-width: 980px;
   margin: 0 auto;
+}
+
+.home-hero {
+  background: linear-gradient(rgba(17, 24, 39, 0.55), rgba(17, 24, 39, 0.55)),
+    url('https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1400&q=80')
+      center / cover;
+  border-radius: 16px;
+  padding: 40px 24px;
+  color: #fff;
+}
+
+.home-hero-content {
+  max-width: 680px;
 }
 
 .data-source {
@@ -343,6 +378,14 @@ body {
 .management-actions {
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pagination {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
 

@@ -17,6 +17,8 @@ const rawFirebaseConfig = {
 const collectionConfig = {
   administratorCollection:
     process.env.REACT_APP_FIREBASE_ADMINISTRATOR_COLLECTION || 'Administrator',
+  accessRequestsCollection:
+    process.env.REACT_APP_FIREBASE_ACCESS_REQUESTS_COLLECTION || 'AccessRequests',
   alumniCollection: process.env.REACT_APP_FIREBASE_ALUMNI_COLLECTION || 'Alumni',
   restAlumCollection: process.env.REACT_APP_FIREBASE_REST_ALUM_COLLECTION || 'Rest-Alum',
   restaurantCollection: process.env.REACT_APP_FIREBASE_RESTAURANT_COLLECTION || 'Restaurant',

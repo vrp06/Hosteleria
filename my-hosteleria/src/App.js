@@ -131,6 +131,7 @@ function App() {
   const [dataLoading, setDataLoading] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [authUser, setAuthUser] = useState(null);
+  const [selectedLanguage, setSelectedLanguage] = useState('ca');
   const [adminEmails, setAdminEmails] = useState([]);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -150,6 +151,13 @@ function App() {
   const [editingForm, setEditingForm] = useState({ nom: '', imatge: '', status: '', email: '' });
   const [managementMessage, setManagementMessage] = useState('');
   const [managementError, setManagementError] = useState('');
+  const [accessRequests, setAccessRequests] = useState([]);
+  const [showRequestAccess, setShowRequestAccess] = useState(false);
+  const [requestAccessForm, setRequestAccessForm] = useState({ email: '', fullName: '' });
+  const [requestAccessError, setRequestAccessError] = useState('');
+  const [requestAccessSuccess, setRequestAccessSuccess] = useState('');
+  const [restaurantsView, setRestaurantsView] = useState('list');
+  const [restaurantsPage, setRestaurantsPage] = useState(1);
   const [managementPage, setManagementPage] = useState('menu');
   const [newAlumneForm, setNewAlumneForm] = useState({
     nom: '',
@@ -222,6 +230,10 @@ function App() {
             relationResponse.json(),
             administratorResponse.json(),
           ]);
+        const requestResponse = await fetch(
+          `${baseUrl}/${config.accessRequestsCollection || 'AccessRequests'}?key=${config.apiKey}`
+        );
+        const requestPayload = requestResponse.ok ? await requestResponse.json() : { documents: [] };
 
         const alumniDocs = (alumniPayload.documents || []).map(parseAlumniDoc);
         const restaurantDocs = (restaurantPayload.documents || []).map(parseRestaurantDoc);
@@ -236,11 +248,19 @@ function App() {
         setAlumnes(linkedData.alumnes);
         setRestaurants(linkedData.restaurants);
         setAdminEmails(administratorDocs.filter(Boolean));
+        setAccessRequests(
+          (requestPayload.documents || [])
+            .map((doc) => ({
+              email: firestoreString(doc?.fields?.Email || doc?.fields?.email).trim().toLowerCase(),
+            }))
+            .filter((doc) => doc.email)
+        );
         setDataSource('firebase');
       } catch (_error) {
         setAlumnes([]);
         setRestaurants([]);
         setAdminEmails([]);
+        setAccessRequests([]);
         setDataSource('local');
         setDataError('Error de conexión con el servidor');
       } finally {
@@ -269,6 +289,8 @@ function App() {
       items.push({ key: 'addAlumnes', label: 'Agregar Alumnos' });
       items.push({ key: 'addRestaurants', label: 'Agregar Restaurantes' });
       items.push({ key: 'generateOthers', label: 'Generar Otros' });
+    } else if (authUser) {
+      items.push({ key: 'editProfile', label: 'Editar perfil' });
     }
     items.push({ key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' });
     return items;
@@ -282,6 +304,10 @@ function App() {
 
   const goToPage = async (page) => {
     if (page === 'logout') {
+      const shouldLogout = window.confirm('¿Seguro que quieres cerrar sesión?');
+      if (!shouldLogout) {
+        return;
+      }
       setAuthUser(null);
       setLoginError('');
       setLoginPassword('');
@@ -384,6 +410,33 @@ function App() {
         restaurant.nom.toLowerCase().includes(term) || restaurant.adreca.toLowerCase().includes(term)
     );
   }, [restaurants, searchRestaurants]);
+
+  const currentUserProfile = useMemo(
+    () => alumnes.find((alumne) => alumne.email.toLowerCase() === authUser?.email?.toLowerCase()) || null,
+    [alumnes, authUser]
+  );
+
+  useEffect(() => {
+    setRestaurantsPage(1);
+  }, [searchRestaurants, restaurantsView]);
+
+  useEffect(() => {
+    if (activePage === 'editProfile' && currentUserProfile) {
+      setEditingForm({
+        nom: currentUserProfile.nom,
+        imatge: currentUserProfile.imatge === '/user_default' ? '' : currentUserProfile.imatge,
+        status: currentUserProfile.status,
+        email: currentUserProfile.email,
+      });
+    }
+  }, [activePage, currentUserProfile]);
+
+  const restaurantsPerPage = 6;
+  const totalRestaurantPages = Math.max(1, Math.ceil(filteredRestaurants.length / restaurantsPerPage));
+  const paginatedRestaurants = filteredRestaurants.slice(
+    (restaurantsPage - 1) * restaurantsPerPage,
+    restaurantsPage * restaurantsPerPage
+  );
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -504,6 +557,54 @@ function App() {
       setSignUpError(error.message || 'No se ha podido completar el registro');
     } finally {
       setSignUpLoading(false);
+    }
+  };
+
+  const handleRequestAccess = async (event) => {
+    event.preventDefault();
+    setRequestAccessError('');
+    setRequestAccessSuccess('');
+    const config = getFirebaseConfig();
+    const normalizedEmail = requestAccessForm.email.trim().toLowerCase();
+    const fullName = requestAccessForm.fullName.trim();
+
+    if (!normalizedEmail || !fullName) {
+      setRequestAccessError('Debes indicar email y nombre y apellidos');
+      return;
+    }
+
+    const alreadyUser = alumnes.some((alumne) => alumne.email.toLowerCase() === normalizedEmail);
+    const alreadyAdmin = adminEmails.includes(normalizedEmail);
+    const alreadyRequested = accessRequests.some((request) => request.email === normalizedEmail);
+    if (alreadyUser || alreadyAdmin || alreadyRequested) {
+      setRequestAccessError('Esta cuenta ya existe o ya ha solicitado acceso');
+      return;
+    }
+
+    try {
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const response = await fetch(
+        `${baseUrl}/${config.accessRequestsCollection || 'AccessRequests'}?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              Email: { stringValue: normalizedEmail },
+              FullName: { stringValue: fullName },
+              RequestedAt: { stringValue: new Date().toISOString() },
+            },
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error('request-access-error');
+      }
+      setAccessRequests((current) => [...current, { email: normalizedEmail }]);
+      setRequestAccessForm({ email: '', fullName: '' });
+      setRequestAccessSuccess('Solicitud enviada correctamente');
+    } catch (_error) {
+      setRequestAccessError('No se ha podido enviar la solicitud');
     }
   };
 
@@ -843,7 +944,7 @@ function App() {
           <div>
             <h3>{item.nom}</h3>
             <p>{type === 'alumne' ? item.status : item.adreca}</p>
-            {type === 'alumne' && <p>{item.email || 'Sense email'}</p>}
+            {type === 'alumne' && authUser && <p>{item.email || 'Sense email'}</p>}
             <button
               type="button"
               className="details-button"
@@ -893,6 +994,15 @@ function App() {
           <img src="/logo_joviat.webp" alt="Logo Joviat" className="brand-logo" />
         </button>
 
+        {authUser && (
+          <div className="user-chip">
+            {!authUser.isAdmin && currentUserProfile?.imatge && (
+              <img src={currentUserProfile.imatge} alt={authUser.email} className="user-chip-avatar" />
+            )}
+            <span>{authUser.email}</span>
+          </div>
+        )}
+
         <button
           type="button"
           className="theme-toggle"
@@ -915,6 +1025,18 @@ function App() {
               {item.label}
             </button>
           ))}
+          <label className="language-picker">
+            Idioma
+            <select
+              className="search-input"
+              value={selectedLanguage}
+              onChange={(event) => setSelectedLanguage(event.target.value)}
+            >
+              <option value="ca">Català</option>
+              <option value="es">Español</option>
+              <option value="en">English</option>
+            </select>
+          </label>
         </nav>
       </aside>
 
@@ -929,12 +1051,22 @@ function App() {
 
       <main className="main-content">
         {renderDataStatus()}
-        {authUser && <p className="auth-badge">Sessió iniciada: {authUser.email}</p>}
+        {authUser && <p className="auth-badge">Sessió iniciada</p>}
 
         {activePage === 'inici' && (
-          <section>
-            <h1>Benvinguts a Hostaleria Joviat</h1>
-            <p>Dades carregades des de les col·leccions Alumni, Restaurant i Rest-Alum.</p>
+          <section className="home-hero">
+            <div className="home-hero-content">
+              <h1>Benvinguts a Hostaleria Joviat</h1>
+              <p>Dades carregades des de les col·leccions Alumni, Restaurant i Rest-Alum.</p>
+              <div className="management-actions">
+                <button type="button" className="details-button" onClick={() => goToPage('restaurants')}>
+                  Explorar restaurants
+                </button>
+                <button type="button" className="back-button" onClick={() => goToPage('alumnes')}>
+                  Explorar alumnes
+                </button>
+              </div>
+            </div>
           </section>
         )}
 
@@ -1026,7 +1158,45 @@ function App() {
               <button type="submit" className="details-button" disabled={loginLoading}>
                 {loginLoading ? 'Comprovant accés...' : 'Entrar'}
               </button>
+              <button
+                type="button"
+                className="back-button"
+                onClick={() => setShowRequestAccess((current) => !current)}
+              >
+                Sol·licitar accés
+              </button>
             </form>
+            {showRequestAccess && (
+              <form className="login-form" onSubmit={handleRequestAccess}>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    className="search-input"
+                    value={requestAccessForm.email}
+                    onChange={(event) =>
+                      setRequestAccessForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Nom i cognoms
+                  <input
+                    type="text"
+                    className="search-input"
+                    value={requestAccessForm.fullName}
+                    onChange={(event) =>
+                      setRequestAccessForm((current) => ({ ...current, fullName: event.target.value }))
+                    }
+                  />
+                </label>
+                {requestAccessError && <p className="login-error">{requestAccessError}</p>}
+                {requestAccessSuccess && <p className="auth-badge">{requestAccessSuccess}</p>}
+                <button type="submit" className="details-button">
+                  Enviar solicitud
+                </button>
+              </form>
+            )}
           </section>
         )}
 
@@ -1442,6 +1612,54 @@ function App() {
           </section>
         )}
 
+        {activePage === 'editProfile' && authUser && !authUser.isAdmin && currentUserProfile && (
+          <section className="detail-page login-panel">
+            <h2>Editar perfil</h2>
+            <div className="login-form">
+              <label>
+                Nombre
+                <input
+                  type="text"
+                  className="search-input"
+                  value={editingForm.nom || currentUserProfile.nom}
+                  onChange={(event) =>
+                    setEditingForm((current) => ({ ...current, nom: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                PhotoURL
+                <input
+                  type="text"
+                  className="search-input"
+                  value={editingForm.imatge || currentUserProfile.imatge}
+                  onChange={(event) =>
+                    setEditingForm((current) => ({ ...current, imatge: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Status
+                <input
+                  type="text"
+                  className="search-input"
+                  value={editingForm.status || currentUserProfile.status}
+                  onChange={(event) =>
+                    setEditingForm((current) => ({ ...current, status: event.target.value }))
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="details-button"
+                onClick={() => handleSaveAlumne(currentUserProfile.id)}
+              >
+                Guardar perfil
+              </button>
+            </div>
+          </section>
+        )}
+
         {activePage === 'alumnes' && (
           <section className="students-section">
             <h2>Visualitzar Alumnes</h2>
@@ -1469,7 +1687,7 @@ function App() {
                       <div>
                         <h3>{alumne.nom}</h3>
                         <p>{alumne.status}</p>
-                        <p>{alumne.email || 'Sense email'}</p>
+                        {authUser && <p>{alumne.email || 'Sense email'}</p>}
                         <p className="relation-text">
                           Restaurants:{' '}
                           {relatedRestaurants.length
@@ -1502,9 +1720,15 @@ function App() {
             <p>
               <strong>Status:</strong> {selectedAlumne.status}
             </p>
-            <p>
-              <strong>Email:</strong> {selectedAlumne.email || 'Sense email'}
-            </p>
+            {authUser ? (
+              <p>
+                <strong>Email:</strong> {selectedAlumne.email || 'Sense email'}
+              </p>
+            ) : (
+              <p>
+                <strong>Email:</strong> Inicia sessió per veure el contacte.
+              </p>
+            )}
             <h3>Restaurants vinculats</h3>
             {renderRelationCards(
               (selectedAlumne.restaurantsIds || [])
@@ -1519,12 +1743,21 @@ function App() {
           <section>
             <h2>Restaurants</h2>
             <p>Mapa i llistat dels restaurants disponibles.</p>
-            <div className="map-wrapper">
-              <iframe
-                title="Mapa de restaurants Joviat"
-                src="https://www.openstreetmap.org/export/embed.html?bbox=1.8100%2C41.7100%2C1.8600%2C41.7400&layer=mapnik&marker=41.7281%2C1.8272"
-                loading="lazy"
-              />
+            <div className="management-actions">
+              <button
+                type="button"
+                className={restaurantsView === 'list' ? 'details-button' : 'back-button'}
+                onClick={() => setRestaurantsView('list')}
+              >
+                Mode llistat
+              </button>
+              <button
+                type="button"
+                className={restaurantsView === 'map' ? 'details-button' : 'back-button'}
+                onClick={() => setRestaurantsView('map')}
+              >
+                Mode mapa
+              </button>
             </div>
             <input
               type="search"
@@ -1537,48 +1770,86 @@ function App() {
             {dataError ? (
               <p className="login-error">{dataError}</p>
             ) : (
-              <div className="restaurants-grid">
-                {filteredRestaurants.map((restaurant) => {
-                  const relatedAlumnes = (restaurant.alumnesIds || [])
-                    .map((alumneId) => alumneById[String(alumneId)])
-                    .filter(Boolean);
+              <>
+                {restaurantsView === 'map' && (
+                  <div className="map-wrapper">
+                    <iframe
+                      title="Mapa de restaurants Joviat"
+                      src="https://www.openstreetmap.org/export/embed.html?bbox=1.8100%2C41.7100%2C1.8600%2C41.7400&layer=mapnik&marker=41.7281%2C1.8272"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+                {restaurantsView === 'list' && (
+                  <>
+                    <div className="restaurants-grid">
+                      {paginatedRestaurants.map((restaurant) => {
+                        const relatedAlumnes = (restaurant.alumnesIds || [])
+                          .map((alumneId) => alumneById[String(alumneId)])
+                          .filter(Boolean);
 
-                  return (
-                    <article className="restaurant-card" key={restaurant.id}>
-                      {restaurant.ubicacio && (
-                        <div className="map-wrapper card-map">
-                          <iframe
-                            title={`Mapa de ${restaurant.nom}`}
-                            src={restaurantMapUrl(restaurant)}
-                            loading="lazy"
-                          />
-                        </div>
-                      )}
-                      <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
-                      <h3>{restaurant.nom}</h3>
-                      <p>{restaurant.adreca}</p>
-                      {restaurant.ubicacio && (
-                        <p>
-                          Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
-                        </p>
-                      )}
-                      <p className="relation-text">
-                        Alumnes:{' '}
-                        {relatedAlumnes.length
-                          ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
-                          : 'Sense dades'}
-                      </p>
+                        return (
+                          <article className="restaurant-card" key={restaurant.id}>
+                            {restaurant.ubicacio && (
+                              <div className="map-wrapper card-map">
+                                <iframe
+                                  title={`Mapa de ${restaurant.nom}`}
+                                  src={restaurantMapUrl(restaurant)}
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+                            <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
+                            <h3>{restaurant.nom}</h3>
+                            <p>{restaurant.adreca}</p>
+                            {restaurant.ubicacio && (
+                              <p>
+                                Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
+                              </p>
+                            )}
+                            <p className="relation-text">
+                              Alumnes:{' '}
+                              {relatedAlumnes.length
+                                ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
+                                : 'Sense dades'}
+                            </p>
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                            >
+                              Ver detalles
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    <div className="pagination">
+                      <button
+                        type="button"
+                        className="back-button"
+                        disabled={restaurantsPage === 1}
+                        onClick={() => setRestaurantsPage((current) => Math.max(1, current - 1))}
+                      >
+                        Anterior
+                      </button>
+                      <span>
+                        Página {restaurantsPage} de {totalRestaurantPages}
+                      </span>
                       <button
                         type="button"
                         className="details-button"
-                        onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                        disabled={restaurantsPage === totalRestaurantPages}
+                        onClick={() =>
+                          setRestaurantsPage((current) => Math.min(totalRestaurantPages, current + 1))
+                        }
                       >
-                        Ver detalles
+                        Siguiente
                       </button>
-                    </article>
-                  );
-                })}
-              </div>
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </section>
         )}
