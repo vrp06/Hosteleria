@@ -176,6 +176,34 @@ function App() {
     links: [{ alumneId: '', rol: '', currentJob: false }],
   });
 
+  const languageText = useMemo(
+    () =>
+      ({
+        ca: {
+          subtitle: "Cicle formatiu hoteleria",
+          homeTitle: 'Descobreix fins on arriba la xarxa de la Joviat',
+          homeDesc: "Connecta amb alumni i establiments que mantenen viu el talent format a l'escola.",
+          exploreRestaurants: 'Explorar establiments',
+          exploreAlumnes: 'Explorar alumnes',
+        },
+        es: {
+          subtitle: 'Ciclo formativo hostelería',
+          homeTitle: 'Descubre hasta dónde llega la red Joviat',
+          homeDesc: 'Conecta con alumni y establecimientos que mantienen vivo el talento formado.',
+          exploreRestaurants: 'Explorar establecimientos',
+          exploreAlumnes: 'Explorar alumnos',
+        },
+        en: {
+          subtitle: 'Hospitality training programme',
+          homeTitle: 'Discover how far the Joviat network reaches',
+          homeDesc: 'Connect with alumni and venues that keep trained talent alive.',
+          exploreRestaurants: 'Explore venues',
+          exploreAlumnes: 'Explore alumni',
+        },
+      })[selectedLanguage],
+    [selectedLanguage]
+  );
+
   useEffect(() => {
     const closeOnResize = () => {
       if (window.innerWidth >= 1024) {
@@ -1025,18 +1053,20 @@ function App() {
               {item.label}
             </button>
           ))}
-          <label className="language-picker">
-            Idioma
-            <select
-              className="search-input"
-              value={selectedLanguage}
-              onChange={(event) => setSelectedLanguage(event.target.value)}
-            >
-              <option value="ca">Català</option>
-              <option value="es">Español</option>
-              <option value="en">English</option>
-            </select>
-          </label>
+          <div className="language-picker">
+            <span>Idioma</span>
+            <div className={`language-switch lang-${selectedLanguage}`}>
+              <button type="button" onClick={() => setSelectedLanguage('ca')}>
+                CA
+              </button>
+              <button type="button" onClick={() => setSelectedLanguage('es')}>
+                ES
+              </button>
+              <button type="button" onClick={() => setSelectedLanguage('en')}>
+                EN
+              </button>
+            </div>
+          </div>
         </nav>
       </aside>
 
@@ -1056,14 +1086,15 @@ function App() {
         {activePage === 'inici' && (
           <section className="home-hero">
             <div className="home-hero-content">
-              <h1>Benvinguts a Hostaleria Joviat</h1>
-              <p>Dades carregades des de les col·leccions Alumni, Restaurant i Rest-Alum.</p>
+              <p className="hero-kicker">{languageText.subtitle}</p>
+              <h1>{languageText.homeTitle}</h1>
+              <p>{languageText.homeDesc}</p>
               <div className="management-actions">
                 <button type="button" className="details-button" onClick={() => goToPage('restaurants')}>
-                  Explorar restaurants
+                  {languageText.exploreRestaurants}
                 </button>
                 <button type="button" className="back-button" onClick={() => goToPage('alumnes')}>
-                  Explorar alumnes
+                  {languageText.exploreAlumnes}
                 </button>
               </div>
             </div>
