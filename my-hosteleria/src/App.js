@@ -3,10 +3,9 @@ import './App.css';
 import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
 
 const baseNavItems = [
-  { key: 'inici', label: 'Inici' },
-  { key: 'alumnes', label: 'Visualitzar Alumnes' },
-  { key: 'restaurants', label: 'Restaurants' },
-  { key: 'signup', label: 'SignUp' },
+  { key: 'inici' },
+  { key: 'alumnes' },
+  { key: 'restaurants' },
 ];
 
 const firestoreString = (field) => field?.stringValue ?? '';
@@ -33,11 +32,11 @@ const parseAlumniDoc = (doc, index) => {
 const parseRestaurantDoc = (doc, index) => {
   const fields = doc?.fields ?? {};
   const id = doc?.name?.split('/').pop() || `restaurant-${index}`;
-  const location = firestoreGeoPoint(fields.location);
+  const location = firestoreGeoPoint(fields.Location) || firestoreGeoPoint(fields.location);
 
   return {
     id,
-    nom: firestoreString(fields.name) || `Restaurant ${index + 1}`,
+    nom: firestoreString(fields.Name) || firestoreString(fields.name) || `Restaurant ${index + 1}`,
     adreca: firestoreString(fields.Address) || 'Sense adreça',
     imatge: firestoreString(fields.PhotoURL) || '/restaurant_default',
     ubicacio: location,
@@ -60,7 +59,7 @@ const parseRelationDoc = (doc, index) => {
 
 const parseAdministratorDoc = (doc) => {
   const fields = doc?.fields ?? {};
-  return firestoreString(fields.Email).trim().toLowerCase();
+  return (firestoreString(fields.Email) || firestoreString(fields.email)).trim().toLowerCase();
 };
 
 const buildLinkedData = (alumniDocs, restaurantDocs, relationDocs) => {
@@ -108,6 +107,15 @@ const alumniToFirestoreFields = (profile) => ({
   email: { stringValue: profile.email || '' },
 });
 
+const restaurantToFirestoreFields = (restaurant) => ({
+  Name: { stringValue: restaurant.nom || '' },
+  Address: { stringValue: restaurant.adreca || '' },
+  PhotoURL: { stringValue: restaurant.imatge || '' },
+});
+
+const buildFirestoreReference = (projectId, collection, id) =>
+  `projects/${projectId}/databases/(default)/documents/${collection}/${id}`;
+
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('inici');
@@ -121,10 +129,11 @@ function App() {
   const [dataSource, setDataSource] = useState('firebase');
   const [dataError, setDataError] = useState('');
   const [dataLoading, setDataLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [authUser, setAuthUser] = useState(null);
+  const [selectedLanguage, setSelectedLanguage] = useState('ca');
   const [adminEmails, setAdminEmails] = useState([]);
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [signUpForm, setSignUpForm] = useState({
@@ -141,6 +150,124 @@ function App() {
   const [editingForm, setEditingForm] = useState({ nom: '', imatge: '', status: '', email: '' });
   const [managementMessage, setManagementMessage] = useState('');
   const [managementError, setManagementError] = useState('');
+  const [accessRequests, setAccessRequests] = useState([]);
+  const [showRequestAccess, setShowRequestAccess] = useState(false);
+  const [requestAccessForm, setRequestAccessForm] = useState({ email: '', fullName: '' });
+  const [requestAccessError, setRequestAccessError] = useState('');
+  const [requestAccessSuccess, setRequestAccessSuccess] = useState('');
+  const [restaurantsView, setRestaurantsView] = useState('list');
+  const [restaurantsPage, setRestaurantsPage] = useState(1);
+  const [managementPage, setManagementPage] = useState('menu');
+  const [newAlumneForm, setNewAlumneForm] = useState({
+    nom: '',
+    email: '',
+    password: '',
+    status: '',
+    imatge: '',
+    restaurantFilter: '',
+    links: [{ restaurantId: '', rol: '', currentJob: false }],
+  });
+  const [newRestaurantForm, setNewRestaurantForm] = useState({
+    nom: '',
+    adreca: '',
+    imatge: '',
+    alumneFilter: '',
+    links: [{ alumneId: '', rol: '', currentJob: false }],
+  });
+
+  const languageText = useMemo(
+    () =>
+      ({
+        ca: {
+          subtitle: "Cicle formatiu hoteleria",
+          homeTitle: 'Descobreix fins on arriba la xarxa de la Joviat',
+          homeDesc: "Connecta amb alumni i establiments que mantenen viu el talent format a l'escola.",
+          exploreRestaurants: 'Explorar establiments',
+          exploreAlumnes: 'Explorar alumnes',
+          home: 'Inici',
+          students: 'Alumnes',
+          restaurants: 'Restaurants',
+          signup: 'Registre',
+          login: 'Login',
+          logout: 'Logout',
+          editProfile: 'Editar perfil',
+          addStudents: 'Afegir alumnes',
+          addRestaurants: 'Afegir restaurants',
+          generateOthers: 'Generar altres',
+          language: 'Idioma',
+          loginTitle: 'Iniciar sessió',
+          email: 'Correu',
+          password: 'Contrasenya',
+          requestAccess: 'Sol·licitar accés',
+          fullName: 'Nom i cognoms',
+          sendRequest: 'Enviar sol·licitud',
+          listMode: 'Mode llistat',
+          mapMode: 'Mode mapa',
+          previous: 'Anterior',
+          next: 'Següent',
+          page: 'Pàgina',
+        },
+        es: {
+          subtitle: 'Ciclo formativo hostelería',
+          homeTitle: 'Descubre hasta dónde llega la red Joviat',
+          homeDesc: 'Conecta con alumni y establecimientos que mantienen vivo el talento formado.',
+          exploreRestaurants: 'Explorar establecimientos',
+          exploreAlumnes: 'Explorar alumnos',
+          home: 'Inicio',
+          students: 'Alumnos',
+          restaurants: 'Restaurantes',
+          signup: 'Registro',
+          login: 'Login',
+          logout: 'Logout',
+          editProfile: 'Editar perfil',
+          addStudents: 'Agregar alumnos',
+          addRestaurants: 'Agregar restaurantes',
+          generateOthers: 'Generar otros',
+          language: 'Idioma',
+          loginTitle: 'Iniciar sesión',
+          email: 'Email',
+          password: 'Contraseña',
+          requestAccess: 'Solicitar acceso',
+          fullName: 'Nombre y apellidos',
+          sendRequest: 'Enviar solicitud',
+          listMode: 'Modo listado',
+          mapMode: 'Modo mapa',
+          previous: 'Anterior',
+          next: 'Siguiente',
+          page: 'Página',
+        },
+        en: {
+          subtitle: 'Hospitality training programme',
+          homeTitle: 'Discover how far the Joviat network reaches',
+          homeDesc: 'Connect with alumni and venues that keep trained talent alive.',
+          exploreRestaurants: 'Explore venues',
+          exploreAlumnes: 'Explore alumni',
+          home: 'Home',
+          students: 'Students',
+          restaurants: 'Restaurants',
+          signup: 'Sign up',
+          login: 'Login',
+          logout: 'Logout',
+          editProfile: 'Edit profile',
+          addStudents: 'Add students',
+          addRestaurants: 'Add restaurants',
+          generateOthers: 'Generate others',
+          language: 'Language',
+          loginTitle: 'Sign in',
+          email: 'Email',
+          password: 'Password',
+          requestAccess: 'Request access',
+          fullName: 'Full name',
+          sendRequest: 'Send request',
+          listMode: 'List mode',
+          mapMode: 'Map mode',
+          previous: 'Previous',
+          next: 'Next',
+          page: 'Page',
+        },
+      })[selectedLanguage],
+    [selectedLanguage]
+  );
 
   useEffect(() => {
     const closeOnResize = () => {
@@ -196,6 +323,10 @@ function App() {
             relationResponse.json(),
             administratorResponse.json(),
           ]);
+        const requestResponse = await fetch(
+          `${baseUrl}/${config.accessRequestsCollection || 'AccessRequests'}?key=${config.apiKey}`
+        );
+        const requestPayload = requestResponse.ok ? await requestResponse.json() : { documents: [] };
 
         const alumniDocs = (alumniPayload.documents || []).map(parseAlumniDoc);
         const restaurantDocs = (restaurantPayload.documents || []).map(parseRestaurantDoc);
@@ -210,11 +341,19 @@ function App() {
         setAlumnes(linkedData.alumnes);
         setRestaurants(linkedData.restaurants);
         setAdminEmails(administratorDocs.filter(Boolean));
+        setAccessRequests(
+          (requestPayload.documents || [])
+            .map((doc) => ({
+              email: firestoreString(doc?.fields?.Email || doc?.fields?.email).trim().toLowerCase(),
+            }))
+            .filter((doc) => doc.email)
+        );
         setDataSource('firebase');
       } catch (_error) {
         setAlumnes([]);
         setRestaurants([]);
         setAdminEmails([]);
+        setAccessRequests([]);
         setDataSource('local');
         setDataError('Error de conexión con el servidor');
       } finally {
@@ -235,13 +374,28 @@ function App() {
   );
 
   const navItems = useMemo(() => {
-    const items = [...baseNavItems];
-    if (authUser?.isAdmin) {
-      items.push({ key: 'gestio', label: 'Gestión' });
+    const labelsByKey = {
+      inici: languageText.home,
+      alumnes: languageText.students,
+      restaurants: languageText.restaurants,
+    };
+    const items = baseNavItems.map((item) => ({ ...item, label: labelsByKey[item.key] || item.key }));
+    if (!authUser) {
+      items.push({ key: 'signup', label: languageText.signup });
     }
-    items.push({ key: authUser ? 'logout' : 'login', label: authUser ? 'Logout' : 'Login' });
+    if (authUser?.isAdmin) {
+      items.push({ key: 'addAlumnes', label: languageText.addStudents });
+      items.push({ key: 'addRestaurants', label: languageText.addRestaurants });
+      items.push({ key: 'generateOthers', label: languageText.generateOthers });
+    } else if (authUser) {
+      items.push({ key: 'editProfile', label: languageText.editProfile });
+    }
+    items.push({
+      key: authUser ? 'logout' : 'login',
+      label: authUser ? languageText.logout : languageText.login,
+    });
     return items;
-  }, [authUser]);
+  }, [authUser, languageText]);
 
   const closeSidebarOnMobile = () => {
     if (window.innerWidth < 1024) {
@@ -249,18 +403,48 @@ function App() {
     }
   };
 
-  const goToPage = (page) => {
+  const goToPage = async (page) => {
     if (page === 'logout') {
+      const shouldLogout = window.confirm('¿Seguro que quieres cerrar sesión?');
+      if (!shouldLogout) {
+        return;
+      }
       setAuthUser(null);
       setLoginError('');
+      setLoginPassword('');
       setManagementMessage('');
       setManagementError('');
+      setManagementPage('menu');
       setActivePage('inici');
       setPageHistory([]);
       closeSidebarOnMobile();
       return;
     }
 
+    if (page === 'gestio') {
+      setManagementPage('menu');
+    }
+
+    if (page === 'addAlumnes') {
+      setManagementPage('createAlumne');
+      setActivePage('gestio');
+      closeSidebarOnMobile();
+      return;
+    }
+
+    if (page === 'addRestaurants') {
+      setManagementPage('createRestaurant');
+      setActivePage('gestio');
+      closeSidebarOnMobile();
+      return;
+    }
+
+    if (page === 'generateOthers') {
+      setManagementPage('generateOthers');
+      setActivePage('gestio');
+      closeSidebarOnMobile();
+      return;
+    }
     setActivePage(page);
     closeSidebarOnMobile();
   };
@@ -328,6 +512,33 @@ function App() {
     );
   }, [restaurants, searchRestaurants]);
 
+  const currentUserProfile = useMemo(
+    () => alumnes.find((alumne) => alumne.email.toLowerCase() === authUser?.email?.toLowerCase()) || null,
+    [alumnes, authUser]
+  );
+
+  useEffect(() => {
+    setRestaurantsPage(1);
+  }, [searchRestaurants, restaurantsView]);
+
+  useEffect(() => {
+    if (activePage === 'editProfile' && currentUserProfile) {
+      setEditingForm({
+        nom: currentUserProfile.nom,
+        imatge: currentUserProfile.imatge === '/user_default' ? '' : currentUserProfile.imatge,
+        status: currentUserProfile.status,
+        email: currentUserProfile.email,
+      });
+    }
+  }, [activePage, currentUserProfile]);
+
+  const restaurantsPerPage = 6;
+  const totalRestaurantPages = Math.max(1, Math.ceil(filteredRestaurants.length / restaurantsPerPage));
+  const paginatedRestaurants = filteredRestaurants.slice(
+    (restaurantsPage - 1) * restaurantsPerPage,
+    restaurantsPage * restaurantsPerPage
+  );
+
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoginError('');
@@ -338,23 +549,36 @@ function App() {
     }
 
     const normalizedEmail = loginEmail.trim().toLowerCase();
-    if (!normalizedEmail) {
-      setLoginError('Introduce un email de administrador');
+    if (!normalizedEmail || !loginPassword.trim()) {
+      setLoginError('Introduce email y contraseña');
       return;
     }
 
     setLoginLoading(true);
 
     try {
-      if (!adminEmails.includes(normalizedEmail)) {
-        setLoginError('El email no existe en la colección Administrator');
-        return;
+      const config = getFirebaseConfig();
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: loginPassword,
+            returnSecureToken: true,
+          }),
+        }
+      );
+      const authPayload = await authResponse.json();
+      if (!authResponse.ok) {
+        throw new Error(authPayload.error?.message || 'signin-auth-error');
       }
-
-      setAuthUser({ email: normalizedEmail, isAdmin: true });
+      setAuthUser({ email: normalizedEmail, isAdmin: adminEmails.includes(normalizedEmail) });
+      setLoginPassword('');
       setActivePage('inici');
     } catch (_error) {
-      setLoginError('Error de conexión con el servidor');
+      setLoginError('Credenciales inválidas en Firebase Auth');
     } finally {
       setLoginLoading(false);
     }
@@ -368,6 +592,11 @@ function App() {
     event.preventDefault();
     setSignUpError('');
     setSignUpSuccess('');
+
+    if (!hasFirebaseConfig) {
+      setSignUpError('Firebase Auth no está configurado');
+      return;
+    }
 
     const config = getFirebaseConfig();
     const normalizedEmail = signUpForm.email.trim().toLowerCase();
@@ -392,7 +621,6 @@ function App() {
           }),
         }
       );
-
       const authPayload = await authResponse.json();
       if (!authResponse.ok) {
         throw new Error(authPayload.error?.message || 'signup-auth-error');
@@ -430,6 +658,54 @@ function App() {
       setSignUpError(error.message || 'No se ha podido completar el registro');
     } finally {
       setSignUpLoading(false);
+    }
+  };
+
+  const handleRequestAccess = async (event) => {
+    event.preventDefault();
+    setRequestAccessError('');
+    setRequestAccessSuccess('');
+    const config = getFirebaseConfig();
+    const normalizedEmail = requestAccessForm.email.trim().toLowerCase();
+    const fullName = requestAccessForm.fullName.trim();
+
+    if (!normalizedEmail || !fullName) {
+      setRequestAccessError('Debes indicar email y nombre y apellidos');
+      return;
+    }
+
+    const alreadyUser = alumnes.some((alumne) => alumne.email.toLowerCase() === normalizedEmail);
+    const alreadyAdmin = adminEmails.includes(normalizedEmail);
+    const alreadyRequested = accessRequests.some((request) => request.email === normalizedEmail);
+    if (alreadyUser || alreadyAdmin || alreadyRequested) {
+      setRequestAccessError('Esta cuenta ya existe o ya ha solicitado acceso');
+      return;
+    }
+
+    try {
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const response = await fetch(
+        `${baseUrl}/${config.accessRequestsCollection || 'AccessRequests'}?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              Email: { stringValue: normalizedEmail },
+              FullName: { stringValue: fullName },
+              RequestedAt: { stringValue: new Date().toISOString() },
+            },
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error('request-access-error');
+      }
+      setAccessRequests((current) => [...current, { email: normalizedEmail }]);
+      setRequestAccessForm({ email: '', fullName: '' });
+      setRequestAccessSuccess('Solicitud enviada correctamente');
+    } catch (_error) {
+      setRequestAccessError('No se ha podido enviar la solicitud');
     }
   };
 
@@ -513,6 +789,234 @@ function App() {
     }
   };
 
+  const createRelation = async ({ alumniId, restaurantId, rol, currentJob }) => {
+    const config = getFirebaseConfig();
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+
+    const relationResponse = await fetch(`${baseUrl}/${config.restAlumCollection}?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          id_alumni: {
+            referenceValue: buildFirestoreReference(config.projectId, config.alumniCollection, alumniId),
+          },
+          id_restaurant: {
+            referenceValue: buildFirestoreReference(
+              config.projectId,
+              config.restaurantCollection,
+              restaurantId
+            ),
+          },
+          rol: { stringValue: rol || 'Sense rol' },
+          current_job: { booleanValue: Boolean(currentJob) },
+        },
+      }),
+    });
+
+    if (!relationResponse.ok) {
+      const payload = await relationResponse.json();
+      throw new Error(payload.error?.message || 'create-relation-error');
+    }
+  };
+
+  const addAlumneLink = () => {
+    setNewAlumneForm((current) => ({
+      ...current,
+      links: [...current.links, { restaurantId: '', rol: '', currentJob: false }],
+    }));
+  };
+
+  const removeAlumneLink = (index) => {
+    setNewAlumneForm((current) => ({
+      ...current,
+      links: current.links.length === 1 ? current.links : current.links.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateAlumneLink = (index, field, value) => {
+    setNewAlumneForm((current) => ({
+      ...current,
+      links: current.links.map((link, i) => (i === index ? { ...link, [field]: value } : link)),
+    }));
+  };
+
+  const addRestaurantLink = () => {
+    setNewRestaurantForm((current) => ({
+      ...current,
+      links: [...current.links, { alumneId: '', rol: '', currentJob: false }],
+    }));
+  };
+
+  const removeRestaurantLink = (index) => {
+    setNewRestaurantForm((current) => ({
+      ...current,
+      links: current.links.length === 1 ? current.links : current.links.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateRestaurantLink = (index, field, value) => {
+    setNewRestaurantForm((current) => ({
+      ...current,
+      links: current.links.map((link, i) => (i === index ? { ...link, [field]: value } : link)),
+    }));
+  };
+
+  const handleCreateAlumneFromManagement = async (event) => {
+    event.preventDefault();
+    setManagementError('');
+    setManagementMessage('');
+
+    const normalizedEmail = newAlumneForm.email.trim().toLowerCase();
+    if (!normalizedEmail || !newAlumneForm.password.trim()) {
+      setManagementError('Para crear un alumno necesitas email y contraseña');
+      return;
+    }
+
+    try {
+      const config = getFirebaseConfig();
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: newAlumneForm.password,
+            returnSecureToken: true,
+          }),
+        }
+      );
+      const authPayload = await authResponse.json();
+      if (!authResponse.ok) {
+        throw new Error(authPayload.error?.message || 'create-alumni-auth-error');
+      }
+      const alumne = {
+        id: authPayload.localId,
+        nom: newAlumneForm.nom.trim() || normalizedEmail.split('@')[0],
+        status: newAlumneForm.status.trim() || 'Nou registre',
+        imatge: newAlumneForm.imatge.trim() || '/user_default',
+        email: normalizedEmail,
+        restaurantsIds: newAlumneForm.links.map((link) => link.restaurantId).filter(Boolean),
+        restaurantRoles: [],
+      };
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const profileResponse = await fetch(
+        `${baseUrl}/${config.alumniCollection}?documentId=${alumne.id}&key=${config.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: alumniToFirestoreFields(alumne) }),
+        }
+      );
+
+      if (!profileResponse.ok) {
+        const payload = await profileResponse.json();
+        throw new Error(payload.error?.message || 'create-alumni-error');
+      }
+
+      const validLinks = newAlumneForm.links.filter((link) => link.restaurantId);
+      await Promise.all(
+        validLinks.map((link) =>
+          createRelation({
+            alumniId: alumne.id,
+            restaurantId: link.restaurantId,
+            rol: link.rol.trim(),
+            currentJob: link.currentJob,
+          })
+        )
+      );
+
+      setAlumnes((current) => [...current, alumne]);
+      setRestaurants((current) =>
+        current.map((restaurant) => {
+          const linked = validLinks.some((link) => link.restaurantId === restaurant.id);
+          return linked
+            ? { ...restaurant, alumnesIds: [...restaurant.alumnesIds, alumne.id] }
+            : restaurant;
+        })
+      );
+      setNewAlumneForm({
+        nom: '',
+        email: '',
+        password: '',
+        status: '',
+        imatge: '',
+        restaurantFilter: '',
+        links: [{ restaurantId: '', rol: '', currentJob: false }],
+      });
+      setManagementMessage('Alumno creado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se pudo crear el alumno');
+    }
+  };
+
+  const handleCreateRestaurant = async (event) => {
+    event.preventDefault();
+    setManagementError('');
+    setManagementMessage('');
+
+    if (!newRestaurantForm.nom.trim()) {
+      setManagementError('El nombre del restaurante es obligatorio');
+      return;
+    }
+
+    try {
+      const config = getFirebaseConfig();
+      const restaurant = {
+        nom: newRestaurantForm.nom.trim(),
+        adreca: newRestaurantForm.adreca.trim() || 'Sense adreça',
+        imatge: newRestaurantForm.imatge.trim() || '/restaurant_default',
+        alumnesIds: newRestaurantForm.links.map((link) => link.alumneId).filter(Boolean),
+        alumnesRoles: [],
+      };
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const response = await fetch(`${baseUrl}/${config.restaurantCollection}?key=${config.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: restaurantToFirestoreFields(restaurant) }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error?.message || 'create-restaurant-error');
+      }
+
+      const restaurantId = payload?.name?.split('/').pop();
+      const newRestaurant = { ...restaurant, id: restaurantId };
+
+      const validLinks = newRestaurantForm.links.filter((link) => link.alumneId);
+      await Promise.all(
+        validLinks.map((link) =>
+          createRelation({
+            alumniId: link.alumneId,
+            restaurantId,
+            rol: link.rol.trim(),
+            currentJob: link.currentJob,
+          })
+        )
+      );
+
+      setRestaurants((current) => [...current, newRestaurant]);
+      setAlumnes((current) =>
+        current.map((alumne) => {
+          const linked = validLinks.some((link) => link.alumneId === alumne.id);
+          return linked ? { ...alumne, restaurantsIds: [...alumne.restaurantsIds, restaurantId] } : alumne;
+        })
+      );
+      setNewRestaurantForm({
+        nom: '',
+        adreca: '',
+        imatge: '',
+        alumneFilter: '',
+        links: [{ alumneId: '', rol: '', currentJob: false }],
+      });
+      setManagementMessage('Restaurante creado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se pudo crear el restaurante');
+    }
+  };
+
   const renderDataStatus = () => {
     if (dataLoading) {
       return <p className="data-source">Cargando datos desde Firebase...</p>;
@@ -541,7 +1045,7 @@ function App() {
           <div>
             <h3>{item.nom}</h3>
             <p>{type === 'alumne' ? item.status : item.adreca}</p>
-            {type === 'alumne' && <p>{item.email || 'Sense email'}</p>}
+            {type === 'alumne' && authUser && <p>{item.email || 'Sense email'}</p>}
             <button
               type="button"
               className="details-button"
@@ -568,7 +1072,7 @@ function App() {
   };
 
   return (
-    <div className={`app-layout ${isDarkMode ? 'dark-mode' : ''}`}>
+    <div className="app-layout">
       <header className="app-header">
         <button
           type="button"
@@ -591,14 +1095,15 @@ function App() {
           <img src="/logo_joviat.webp" alt="Logo Joviat" className="brand-logo" />
         </button>
 
-        <button
-          type="button"
-          className="theme-toggle"
-          aria-label="Activar modo oscuro"
-          onClick={() => setIsDarkMode((current) => !current)}
-        >
-          {isDarkMode ? '☀️' : '🌙'}
-        </button>
+        {authUser && (
+          <div className="user-chip">
+            {!authUser.isAdmin && currentUserProfile?.imatge && (
+              <img src={currentUserProfile.imatge} alt={authUser.email} className="user-chip-avatar" />
+            )}
+            <span>{authUser.email}</span>
+          </div>
+        )}
+
       </header>
 
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
@@ -613,6 +1118,20 @@ function App() {
               {item.label}
             </button>
           ))}
+          <div className="language-picker">
+            <span>{languageText.language}</span>
+            <div className={`language-switch lang-${selectedLanguage}`}>
+              <button type="button" onClick={() => setSelectedLanguage('ca')}>
+                CA
+              </button>
+              <button type="button" onClick={() => setSelectedLanguage('es')}>
+                ES
+              </button>
+              <button type="button" onClick={() => setSelectedLanguage('en')}>
+                EN
+              </button>
+            </div>
+          </div>
         </nav>
       </aside>
 
@@ -627,12 +1146,23 @@ function App() {
 
       <main className="main-content">
         {renderDataStatus()}
-        {authUser && <p className="auth-badge">Sessió iniciada: {authUser.email}</p>}
+        {authUser && <p className="auth-badge">{languageText.loginTitle}</p>}
 
         {activePage === 'inici' && (
-          <section>
-            <h1>Benvinguts a Hostaleria Joviat</h1>
-            <p>Dades carregades des de les col·leccions Alumni, Restaurant i Rest-Alum.</p>
+          <section className="home-hero">
+            <div className="home-hero-content">
+              <p className="hero-kicker">{languageText.subtitle}</p>
+              <h1>{languageText.homeTitle}</h1>
+              <p>{languageText.homeDesc}</p>
+              <div className="management-actions">
+                <button type="button" className="details-button" onClick={() => goToPage('restaurants')}>
+                  {languageText.exploreRestaurants}
+                </button>
+                <button type="button" className="back-button" onClick={() => goToPage('alumnes')}>
+                  {languageText.exploreAlumnes}
+                </button>
+              </div>
+            </div>
           </section>
         )}
 
@@ -696,10 +1226,10 @@ function App() {
 
         {activePage === 'login' && (
           <section className="detail-page login-panel">
-            <h2>Login administrador</h2>
-            <form className="login-form" onSubmit={handleLogin}>
-              <label>
-                Email administrador
+              <h2>{languageText.loginTitle}</h2>
+              <form className="login-form" onSubmit={handleLogin}>
+                <label>
+                  {languageText.email}
                 <input
                   type="email"
                   className="search-input"
@@ -707,103 +1237,521 @@ function App() {
                   onChange={(event) => setLoginEmail(event.target.value)}
                 />
               </label>
+              <label>
+                  {languageText.password}
+                <input
+                  type="password"
+                  className="search-input"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                />
+              </label>
+              <p className="students-subtitle">
+                El acceso de administrador se valida con la colección Administrator después de iniciar
+                sesión.
+              </p>
               {loginError && <p className="login-error">{loginError}</p>}
               <button type="submit" className="details-button" disabled={loginLoading}>
                 {loginLoading ? 'Comprovant accés...' : 'Entrar'}
               </button>
-            </form>
+                <button
+                  type="button"
+                  className="back-button"
+                  onClick={() => setShowRequestAccess((current) => !current)}
+                >
+                  {languageText.requestAccess}
+                </button>
+              </form>
+            {showRequestAccess && (
+              <form className="login-form" onSubmit={handleRequestAccess}>
+                <label>
+                  {languageText.email}
+                  <input
+                    type="email"
+                    className="search-input"
+                    value={requestAccessForm.email}
+                    onChange={(event) =>
+                      setRequestAccessForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  {languageText.fullName}
+                  <input
+                    type="text"
+                    className="search-input"
+                    value={requestAccessForm.fullName}
+                    onChange={(event) =>
+                      setRequestAccessForm((current) => ({ ...current, fullName: event.target.value }))
+                    }
+                  />
+                </label>
+                {requestAccessError && <p className="login-error">{requestAccessError}</p>}
+                {requestAccessSuccess && <p className="auth-badge">{requestAccessSuccess}</p>}
+                <button type="submit" className="details-button">
+                  {languageText.sendRequest}
+                </button>
+              </form>
+            )}
           </section>
         )}
 
         {activePage === 'gestio' && authUser?.isAdmin && (
           <section>
-            <h2>Gestión de perfiles</h2>
-            <p>Desde aquí puedes editar o borrar los alumni dados de alta.</p>
+            <h2>Gestión</h2>
+            <p>Selecciona la acción que quieres realizar.</p>
             {managementError && <p className="login-error">{managementError}</p>}
             {managementMessage && <p className="auth-badge">{managementMessage}</p>}
-            <div className="detail-relations-grid">
-              {alumnes.map((alumne) => (
-                <article key={alumne.id} className="detail-page management-card">
-                  <img src={alumne.imatge} alt={alumne.nom} className="detail-image" />
-                  {editingAlumneId === alumne.id ? (
-                    <div className="login-form">
-                      <label>
-                        Nombre
-                        <input
-                          type="text"
-                          className="search-input"
-                          value={editingForm.nom}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, nom: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        PhotoURL
-                        <input
-                          type="text"
-                          className="search-input"
-                          value={editingForm.imatge}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, imatge: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Status
-                        <input
-                          type="text"
-                          className="search-input"
-                          value={editingForm.status}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, status: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Email
-                        <input
-                          type="email"
-                          className="search-input"
-                          value={editingForm.email}
-                          onChange={(event) =>
-                            setEditingForm((current) => ({ ...current, email: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="details-button"
-                        onClick={() => handleSaveAlumne(alumne.id)}
-                      >
-                        Guardar cambios
+            <div className="management-menu-grid">
+              <button type="button" className="details-button" onClick={() => setManagementPage('createAlumne')}>
+                Crear alumnos
+              </button>
+              <button
+                type="button"
+                className="details-button"
+                onClick={() => setManagementPage('createRestaurant')}
+              >
+                Crear restaurantes
+              </button>
+              <button type="button" className="details-button" onClick={() => setManagementPage('manageAlumnes')}>
+                Gestionar alumnos
+              </button>
+              <button
+                type="button"
+                className="details-button"
+                onClick={() => setManagementPage('manageRestaurants')}
+              >
+                Gestionar restaurantes
+              </button>
+            </div>
+
+            {managementPage === 'createAlumne' && (
+              <section className="admin-form-page">
+                <p className="admin-label">ADMINISTRACIO</p>
+                <h3 className="admin-title">Afegir Alumne</h3>
+                <p className="admin-subtitle">
+                  Dona d'alta un alumne nou i relaciona'l amb tants restaurants com calgui.
+                </p>
+                <form className="admin-form-layout" onSubmit={handleCreateAlumneFromManagement}>
+                  <article className="admin-panel">
+                    <h4>Informacio primaria</h4>
+                    <input
+                      type="text"
+                      className="search-input"
+                      placeholder="Nom complet"
+                      value={newAlumneForm.nom}
+                      onChange={(event) =>
+                        setNewAlumneForm((current) => ({ ...current, nom: event.target.value }))
+                      }
+                    />
+                    <div className="admin-grid-2">
+                      <input
+                        type="email"
+                        className="search-input"
+                        placeholder="Correu electronic*"
+                        value={newAlumneForm.email}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, email: event.target.value }))
+                        }
+                      />
+                      <input
+                        type="password"
+                        className="search-input"
+                        placeholder="Contrasenya*"
+                        value={newAlumneForm.password}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, password: event.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="admin-grid-2">
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Photo URL"
+                        value={newAlumneForm.imatge}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, imatge: event.target.value }))
+                        }
+                      />
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Estat de l'alumne"
+                        value={newAlumneForm.status}
+                        onChange={(event) =>
+                          setNewAlumneForm((current) => ({ ...current, status: event.target.value }))
+                        }
+                      />
+                    </div>
+                  </article>
+
+                  <article className="admin-panel">
+                    <div className="admin-links-header">
+                      <h4>Trajectoria professional · Restaurants</h4>
+                      <button type="button" className="back-button" onClick={addAlumneLink}>
+                        Afegir restaurant
                       </button>
                     </div>
-                  ) : (
-                    <>
-                      <h3>{alumne.nom}</h3>
-                      <p>{alumne.status}</p>
-                      <p>{alumne.email}</p>
-                      <div className="management-actions">
+                    <input
+                      type="search"
+                      className="search-input"
+                      placeholder="Filtrar restaurants pel nom"
+                      value={newAlumneForm.restaurantFilter}
+                      onChange={(event) =>
+                        setNewAlumneForm((current) => ({
+                          ...current,
+                          restaurantFilter: event.target.value,
+                        }))
+                      }
+                    />
+                    {newAlumneForm.links.map((link, index) => (
+                      <div className="relation-editor" key={`alumne-link-${index}`}>
+                        <div className="relation-editor-head">
+                          <h5>Restaurant {index + 1}</h5>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => removeAlumneLink(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <select
+                          className="search-input"
+                          value={link.restaurantId}
+                          onChange={(event) => updateAlumneLink(index, 'restaurantId', event.target.value)}
+                        >
+                          <option value="">Selecciona un restaurant</option>
+                          {restaurants
+                            .filter((restaurant) =>
+                              restaurant.nom
+                                .toLowerCase()
+                                .includes(newAlumneForm.restaurantFilter.trim().toLowerCase())
+                            )
+                            .map((restaurant) => (
+                              <option key={restaurant.id} value={restaurant.id}>
+                                {restaurant.nom}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          type="text"
+                          className="search-input"
+                          placeholder="Rol"
+                          value={link.rol}
+                          onChange={(event) => updateAlumneLink(index, 'rol', event.target.value)}
+                        />
+                        <label className="check-row">
+                          <input
+                            type="checkbox"
+                            checked={link.currentJob}
+                            onChange={(event) =>
+                              updateAlumneLink(index, 'currentJob', event.target.checked)
+                            }
+                          />
+                          Esta treballant actualment en aquest restaurant
+                        </label>
+                      </div>
+                    ))}
+                    <button type="submit" className="details-button">
+                      Crear alumne
+                    </button>
+                  </article>
+                </form>
+              </section>
+            )}
+
+            {managementPage === 'createRestaurant' && (
+              <section className="admin-form-page">
+                <p className="admin-label">ADMINISTRACIO</p>
+                <h3 className="admin-title">Afegir Restaurant</h3>
+                <p className="admin-subtitle">
+                  Dona d'alta un restaurant nou i relaciona'l amb tants alumnes com calgui.
+                </p>
+                <form className="admin-form-layout" onSubmit={handleCreateRestaurant}>
+                  <article className="admin-panel">
+                    <h4>Informacio primaria</h4>
+                    <input
+                      type="text"
+                      className="search-input"
+                      placeholder="Nom del restaurant*"
+                      value={newRestaurantForm.nom}
+                      onChange={(event) =>
+                        setNewRestaurantForm((current) => ({ ...current, nom: event.target.value }))
+                      }
+                    />
+                    <div className="admin-grid-2">
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Adreca"
+                        value={newRestaurantForm.adreca}
+                        onChange={(event) =>
+                          setNewRestaurantForm((current) => ({
+                            ...current,
+                            adreca: event.target.value,
+                          }))
+                        }
+                      />
+                      <input
+                        type="text"
+                        className="search-input"
+                        placeholder="Photo URL"
+                        value={newRestaurantForm.imatge}
+                        onChange={(event) =>
+                          setNewRestaurantForm((current) => ({
+                            ...current,
+                            imatge: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </article>
+
+                  <article className="admin-panel">
+                    <div className="admin-links-header">
+                      <h4>Trajectoria professional · Alumnes</h4>
+                      <button type="button" className="back-button" onClick={addRestaurantLink}>
+                        Afegir alumne
+                      </button>
+                    </div>
+                    <input
+                      type="search"
+                      className="search-input"
+                      placeholder="Filtrar alumnes pel nom"
+                      value={newRestaurantForm.alumneFilter}
+                      onChange={(event) =>
+                        setNewRestaurantForm((current) => ({
+                          ...current,
+                          alumneFilter: event.target.value,
+                        }))
+                      }
+                    />
+                    {newRestaurantForm.links.map((link, index) => (
+                      <div className="relation-editor" key={`restaurant-link-${index}`}>
+                        <div className="relation-editor-head">
+                          <h5>Alumne {index + 1}</h5>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => removeRestaurantLink(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <select
+                          className="search-input"
+                          value={link.alumneId}
+                          onChange={(event) => updateRestaurantLink(index, 'alumneId', event.target.value)}
+                        >
+                          <option value="">Selecciona un alumne</option>
+                          {alumnes
+                            .filter((alumne) =>
+                              alumne.nom
+                                .toLowerCase()
+                                .includes(newRestaurantForm.alumneFilter.trim().toLowerCase())
+                            )
+                            .map((alumne) => (
+                              <option key={alumne.id} value={alumne.id}>
+                                {alumne.nom}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          type="text"
+                          className="search-input"
+                          placeholder="Rol"
+                          value={link.rol}
+                          onChange={(event) => updateRestaurantLink(index, 'rol', event.target.value)}
+                        />
+                        <label className="check-row">
+                          <input
+                            type="checkbox"
+                            checked={link.currentJob}
+                            onChange={(event) =>
+                              updateRestaurantLink(index, 'currentJob', event.target.checked)
+                            }
+                          />
+                          Esta treballant actualment en aquest restaurant
+                        </label>
+                      </div>
+                    ))}
+                    <button type="submit" className="details-button">
+                      Crear restaurant
+                    </button>
+                  </article>
+                </form>
+              </section>
+            )}
+
+            {managementPage === 'manageAlumnes' && (
+              <div className="detail-relations-grid">
+                {alumnes.map((alumne) => (
+                  <article key={alumne.id} className="detail-page management-card">
+                    <img src={alumne.imatge} alt={alumne.nom} className="detail-image" />
+                    {editingAlumneId === alumne.id ? (
+                      <div className="login-form">
+                        <label>
+                          Nombre
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingForm.nom}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, nom: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          PhotoURL
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingForm.imatge}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, imatge: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Status
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingForm.status}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, status: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Email
+                          <input
+                            type="email"
+                            className="search-input"
+                            value={editingForm.email}
+                            onChange={(event) =>
+                              setEditingForm((current) => ({ ...current, email: event.target.value }))
+                            }
+                          />
+                        </label>
                         <button
                           type="button"
                           className="details-button"
-                          onClick={() => startEditingAlumne(alumne)}
+                          onClick={() => handleSaveAlumne(alumne.id)}
                         >
-                          Editar perfil
-                        </button>
-                        <button
-                          type="button"
-                          className="back-button"
-                          onClick={() => handleDeleteAlumne(alumne.id)}
-                        >
-                          Borrar perfil
+                          Guardar cambios
                         </button>
                       </div>
-                    </>
-                  )}
-                </article>
-              ))}
+                    ) : (
+                      <>
+                        <h3>{alumne.nom}</h3>
+                        <p>{alumne.status}</p>
+                        <p>{alumne.email}</p>
+                        <div className="management-actions">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => startEditingAlumne(alumne)}
+                          >
+                            Editar perfil
+                          </button>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => handleDeleteAlumne(alumne.id)}
+                          >
+                            Borrar perfil
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {managementPage === 'manageRestaurants' && (
+              <div className="detail-relations-grid">
+                {restaurants.map((restaurant) => (
+                  <article key={restaurant.id} className="detail-page management-card">
+                    <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
+                    <h3>{restaurant.nom}</h3>
+                    <p>{restaurant.adreca}</p>
+                    {restaurant.ubicacio && (
+                      <p>
+                        Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
+                      </p>
+                    )}
+                    <p>
+                      Alumnos vinculados:{' '}
+                      {(restaurant.alumnesIds || [])
+                        .map((id) => alumneById[String(id)]?.nom)
+                        .filter(Boolean)
+                        .join(', ') || 'Sin datos'}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {managementPage === 'generateOthers' && (
+              <article className="detail-page">
+                <h3>Generar Otros</h3>
+                <p>
+                  Aquí podrás añadir utilidades adicionales de administración (informes, exportaciones o
+                  procesos masivos).
+                </p>
+              </article>
+            )}
+          </section>
+        )}
+
+        {activePage === 'editProfile' && authUser && !authUser.isAdmin && currentUserProfile && (
+          <section className="detail-page login-panel">
+            <h2>Editar perfil</h2>
+            <div className="login-form">
+              <label>
+                Nombre
+                <input
+                  type="text"
+                  className="search-input"
+                  value={editingForm.nom || currentUserProfile.nom}
+                  onChange={(event) =>
+                    setEditingForm((current) => ({ ...current, nom: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                PhotoURL
+                <input
+                  type="text"
+                  className="search-input"
+                  value={editingForm.imatge || currentUserProfile.imatge}
+                  onChange={(event) =>
+                    setEditingForm((current) => ({ ...current, imatge: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Status
+                <input
+                  type="text"
+                  className="search-input"
+                  value={editingForm.status || currentUserProfile.status}
+                  onChange={(event) =>
+                    setEditingForm((current) => ({ ...current, status: event.target.value }))
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="details-button"
+                onClick={() => handleSaveAlumne(currentUserProfile.id)}
+              >
+                Guardar perfil
+              </button>
             </div>
           </section>
         )}
@@ -835,7 +1783,7 @@ function App() {
                       <div>
                         <h3>{alumne.nom}</h3>
                         <p>{alumne.status}</p>
-                        <p>{alumne.email || 'Sense email'}</p>
+                        {authUser && <p>{alumne.email || 'Sense email'}</p>}
                         <p className="relation-text">
                           Restaurants:{' '}
                           {relatedRestaurants.length
@@ -868,9 +1816,15 @@ function App() {
             <p>
               <strong>Status:</strong> {selectedAlumne.status}
             </p>
-            <p>
-              <strong>Email:</strong> {selectedAlumne.email || 'Sense email'}
-            </p>
+            {authUser ? (
+              <p>
+                <strong>Email:</strong> {selectedAlumne.email || 'Sense email'}
+              </p>
+            ) : (
+              <p>
+                <strong>Email:</strong> Inicia sessió per veure el contacte.
+              </p>
+            )}
             <h3>Restaurants vinculats</h3>
             {renderRelationCards(
               (selectedAlumne.restaurantsIds || [])
@@ -885,12 +1839,21 @@ function App() {
           <section>
             <h2>Restaurants</h2>
             <p>Mapa i llistat dels restaurants disponibles.</p>
-            <div className="map-wrapper">
-              <iframe
-                title="Mapa de restaurants Joviat"
-                src="https://www.openstreetmap.org/export/embed.html?bbox=1.8100%2C41.7100%2C1.8600%2C41.7400&layer=mapnik&marker=41.7281%2C1.8272"
-                loading="lazy"
-              />
+            <div className="management-actions">
+              <button
+                type="button"
+                className={restaurantsView === 'list' ? 'details-button' : 'back-button'}
+                onClick={() => setRestaurantsView('list')}
+              >
+                {languageText.listMode}
+              </button>
+              <button
+                type="button"
+                className={restaurantsView === 'map' ? 'details-button' : 'back-button'}
+                onClick={() => setRestaurantsView('map')}
+              >
+                {languageText.mapMode}
+              </button>
             </div>
             <input
               type="search"
@@ -903,34 +1866,86 @@ function App() {
             {dataError ? (
               <p className="login-error">{dataError}</p>
             ) : (
-              <div className="restaurants-grid">
-                {filteredRestaurants.map((restaurant) => {
-                  const relatedAlumnes = (restaurant.alumnesIds || [])
-                    .map((alumneId) => alumneById[String(alumneId)])
-                    .filter(Boolean);
+              <>
+                {restaurantsView === 'map' && (
+                  <div className="map-wrapper">
+                    <iframe
+                      title="Mapa de restaurants Joviat"
+                      src="https://www.openstreetmap.org/export/embed.html?bbox=1.8100%2C41.7100%2C1.8600%2C41.7400&layer=mapnik&marker=41.7281%2C1.8272"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+                {restaurantsView === 'list' && (
+                  <>
+                    <div className="restaurants-grid">
+                      {paginatedRestaurants.map((restaurant) => {
+                        const relatedAlumnes = (restaurant.alumnesIds || [])
+                          .map((alumneId) => alumneById[String(alumneId)])
+                          .filter(Boolean);
 
-                  return (
-                    <article className="restaurant-card" key={restaurant.id}>
-                      <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
-                      <h3>{restaurant.nom}</h3>
-                      <p>{restaurant.adreca}</p>
-                      <p className="relation-text">
-                        Alumnes:{' '}
-                        {relatedAlumnes.length
-                          ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
-                          : 'Sense dades'}
-                      </p>
+                        return (
+                          <article className="restaurant-card" key={restaurant.id}>
+                            {restaurant.ubicacio && (
+                              <div className="map-wrapper card-map">
+                                <iframe
+                                  title={`Mapa de ${restaurant.nom}`}
+                                  src={restaurantMapUrl(restaurant)}
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+                            <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
+                            <h3>{restaurant.nom}</h3>
+                            <p>{restaurant.adreca}</p>
+                            {restaurant.ubicacio && (
+                              <p>
+                                Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
+                              </p>
+                            )}
+                            <p className="relation-text">
+                              Alumnes:{' '}
+                              {relatedAlumnes.length
+                                ? relatedAlumnes.map((alumne) => alumne.nom).join(', ')
+                                : 'Sense dades'}
+                            </p>
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                            >
+                              Ver detalles
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    <div className="pagination">
+                      <button
+                        type="button"
+                        className="back-button"
+                        disabled={restaurantsPage === 1}
+                        onClick={() => setRestaurantsPage((current) => Math.max(1, current - 1))}
+                      >
+                        {languageText.previous}
+                      </button>
+                      <span>
+                        {languageText.page} {restaurantsPage} / {totalRestaurantPages}
+                      </span>
                       <button
                         type="button"
                         className="details-button"
-                        onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                        disabled={restaurantsPage === totalRestaurantPages}
+                        onClick={() =>
+                          setRestaurantsPage((current) => Math.min(totalRestaurantPages, current + 1))
+                        }
                       >
-                        Ver detalles
+                        {languageText.next}
                       </button>
-                    </article>
-                  );
-                })}
-              </div>
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </section>
         )}
