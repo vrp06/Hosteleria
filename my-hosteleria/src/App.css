@@ -496,6 +496,19 @@ body {
   margin-top: 6px;
 }
 
+.login-panel,
+.detail-page,
+.restaurants-grid .alumni-card {
+  background: #e8e1d3;
+  color: #111;
+}
+
+.login-panel h2,
+.detail-page h2,
+.detail-page h3 {
+  color: #0b1220;
+}
+
 .management-card {
   display: flex;
   flex-direction: column;

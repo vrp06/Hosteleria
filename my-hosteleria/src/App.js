@@ -1869,9 +1869,11 @@ function App() {
         )}
 
         {activePage === 'restaurants' && (
-          <section>
-            <h2>Restaurants</h2>
-            <p>Mapa i llistat dels restaurants disponibles.</p>
+          <section className="students-section students-page">
+            <h2 className="students-title">🍽️ Llistat d'establiments</h2>
+            <p className="students-subtitle">
+              Cercar restaurants <small>(mostrant {filteredRestaurants.length} de {restaurants.length})</small>
+            </p>
             <div className="management-actions">
               <button
                 type="button"
@@ -1891,7 +1893,7 @@ function App() {
             <input
               type="search"
               className="search-input"
-              placeholder="Buscar restaurant o adreça"
+              placeholder="Escriu el nom del restaurant"
               aria-label="Buscar restaurants"
               value={searchRestaurants}
               onChange={(event) => setSearchRestaurants(event.target.value)}
@@ -1918,7 +1920,7 @@ function App() {
                           .filter(Boolean);
 
                         return (
-                          <article className="restaurant-card" key={restaurant.id}>
+                          <article className="restaurant-card alumni-card" key={restaurant.id}>
                             {restaurant.ubicacio && (
                               <div className="map-wrapper card-map">
                                 <iframe
