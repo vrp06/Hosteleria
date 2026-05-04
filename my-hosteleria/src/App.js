@@ -1757,17 +1757,50 @@ function App() {
         )}
 
         {activePage === 'alumnes' && (
-          <section className="students-section">
-            <h2>Visualitzar Alumnes</h2>
-            <p className="students-subtitle">Llistat d'alumnes des de la col·lecció Alumni</p>
-            <input
-              type="search"
-              className="search-input"
-              placeholder="Buscar alumne, estat o email"
-              aria-label="Buscar alumnes"
-              value={searchAlumnes}
-              onChange={(event) => setSearchAlumnes(event.target.value)}
-            />
+          <section className="students-section students-page">
+            <h2 className="students-title">👨‍🍳 Llistat d'alumnis</h2>
+            <p className="students-subtitle">
+              Cercar alumnes <small>(mostrant {filteredAlumnes.length} de {alumnes.length})</small>
+            </p>
+            <div className="students-search-row">
+              <input
+                type="search"
+                className="search-input"
+                placeholder="Escriu el nom de l'alumni"
+                aria-label="Buscar alumnes"
+                value={searchAlumnes}
+                onChange={(event) => setSearchAlumnes(event.target.value)}
+              />
+              <span className="filter-icon" aria-hidden="true">⚙️</span>
+            </div>
+            <div className="students-filters-box">
+              <div className="students-filters-grid">
+                <label>
+                  Tipus d'alumne
+                  <select className="search-input">
+                    <option>Alumnes i exalumnes</option>
+                  </select>
+                </label>
+                <label>
+                  Situació laboral
+                  <select className="search-input">
+                    <option>Qualsevol situació</option>
+                  </select>
+                </label>
+                <label>
+                  Any de promoció
+                  <select className="search-input">
+                    <option>Qualsevol any</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                Rol
+                <select className="search-input">
+                  <option>Qualsevol rol</option>
+                </select>
+              </label>
+            </div>
             {dataError ? (
               <p className="login-error">{dataError}</p>
             ) : (
@@ -1778,7 +1811,7 @@ function App() {
                     .filter(Boolean);
 
                   return (
-                    <article className="student-card" key={alumne.id}>
+                    <article className="student-card alumni-card" key={alumne.id}>
                       <img src={alumne.imatge} alt={alumne.nom} className="student-image" />
                       <div>
                         <h3>{alumne.nom}</h3>
