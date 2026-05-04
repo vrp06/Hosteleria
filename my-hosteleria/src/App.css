@@ -5,18 +5,18 @@
 body {
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #f5f6fa;
+  background: #050505;
 }
 
 .app-layout {
   min-height: 100vh;
-  color: #1f2937;
-  background: #f5f6fa;
+  color: #f3f4f6;
+  background: #050505;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
 .app-layout.dark-mode {
-  background: #111827;
+  background: #050505;
   color: #f9fafb;
 }
 
@@ -29,12 +29,11 @@ body {
   align-items: center;
   gap: 16px;
   padding: 0 16px;
-  background: #111827;
+  background: #000;
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.2);
 }
 
 .theme-toggle {
-  margin-left: auto;
   width: 44px;
   height: 44px;
   border: none;
@@ -43,6 +42,23 @@ body {
   color: #f9fafb;
   font-size: 1.1rem;
   cursor: pointer;
+}
+
+.user-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.user-chip-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e7eb;
 }
 
 .menu-toggle {
@@ -82,8 +98,8 @@ body {
   position: fixed;
   inset: 72px auto 0 0;
   width: min(280px, 86vw);
-  background: #ffffff;
-  border-right: 1px solid #e5e7eb;
+  background: #060606;
+  border-right: 1px solid #262626;
   transform: translateX(-105%);
   transition: transform 0.25s ease;
   z-index: 40;
@@ -91,8 +107,8 @@ body {
 }
 
 .app-layout.dark-mode .sidebar {
-  background: #1f2937;
-  border-right-color: #374151;
+  background: #060606;
+  border-right-color: #262626;
 }
 
 .sidebar.open {
@@ -105,13 +121,65 @@ body {
   gap: 12px;
 }
 
+.language-picker {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+  color: #d1d5db;
+  gap: 8px;
+}
+
+.language-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: #111;
+  border: 1px solid #2e2e2e;
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.language-switch::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(33.333% - 6px);
+  border-radius: 999px;
+  background: #f3d7a8;
+  transition: transform 0.25s ease;
+}
+
+.language-switch.lang-es::before {
+  transform: translateX(calc(100% + 6px));
+}
+
+.language-switch.lang-en::before {
+  transform: translateX(calc(200% + 12px));
+}
+
+.language-switch button {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  color: #f3f4f6;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
 .nav-link {
   border: none;
   background: transparent;
   text-align: left;
-  color: #111827;
+  color: #e5e7eb;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
@@ -123,12 +191,12 @@ body {
 
 .nav-link:hover,
 .nav-link.active {
-  background: #f3f4f6;
+  background: #1a1a1a;
 }
 
 .app-layout.dark-mode .nav-link:hover,
 .app-layout.dark-mode .nav-link.active {
-  background: #374151;
+  background: #1a1a1a;
 }
 
 .sidebar-overlay {
@@ -143,6 +211,33 @@ body {
   padding: 24px 16px 42px;
   max-width: 980px;
   margin: 0 auto;
+}
+
+.home-hero {
+  background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.65)),
+    url('https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1400&q=80')
+      center / cover;
+  border-radius: 16px;
+  padding: 48px 32px;
+  color: #fff;
+  border: 1px solid #2a2a2a;
+  min-height: 72vh;
+}
+
+.home-hero-content {
+  max-width: 680px;
+}
+
+.hero-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #f3d7a8;
+  font-weight: 800;
+}
+
+.home-hero h1 {
+  font-size: clamp(2.8rem, 6vw, 5.4rem);
+  line-height: 0.95;
 }
 
 .data-source {
@@ -165,6 +260,10 @@ body {
   color: #166534;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.app-layout.dark-mode .auth-badge {
+  color: #111827;
 }
 
 .login-panel {
@@ -194,10 +293,55 @@ body {
   margin-top: 12px;
 }
 
+.students-page {
+  background: #e8e1d3;
+  border-radius: 12px;
+  padding: 18px;
+  color: #111;
+}
+
+.students-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 0 0 10px;
+  color: #0b1220;
+}
+
 .students-subtitle {
   margin-top: -6px;
   margin-bottom: 14px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.students-search-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.filter-icon {
+  font-size: 1.4rem;
+}
+
+.students-filters-box {
+  background: #ececec;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.students-filters-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.students-filters-box label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.82rem;
 }
 
 .search-input {
@@ -244,6 +388,26 @@ body {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.alumni-card {
+  flex-direction: column;
+  align-items: stretch;
+  background: #efe9dc;
+  border: 1px solid #fff;
+}
+
+.alumni-card .student-image {
+  width: 100%;
+  height: 210px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: #f5efdf;
+}
+
+.alumni-card .details-button {
+  width: 100%;
+  margin-top: 10px;
 }
 
 .restaurant-card,
@@ -317,17 +481,32 @@ body {
 }
 
 .details-button {
-  background: #2563eb;
+  background: transparent;
   color: #fff;
+  border: 1px solid #f3f4f6;
 }
 
 .back-button {
-  background: #e5e7eb;
-  color: #111827;
+  background: #1d1d1d;
+  color: #f3f4f6;
+  border: 1px solid #333;
 }
 
 .detail-page {
   margin-top: 6px;
+}
+
+.login-panel,
+.detail-page,
+.restaurants-grid .alumni-card {
+  background: #e8e1d3;
+  color: #111;
+}
+
+.login-panel h2,
+.detail-page h2,
+.detail-page h3 {
+  color: #0b1220;
 }
 
 .management-card {
@@ -340,6 +519,105 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.pagination {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.management-create-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.management-menu-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.admin-form-page {
+  margin-top: 10px;
+}
+
+.admin-label {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: #7c5d33;
+}
+
+.admin-title {
+  margin: 8px 0 6px;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+}
+
+.admin-subtitle {
+  margin: 0 0 16px;
+  color: #6b7280;
+}
+
+.admin-form-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-panel {
+  background: #ece8cc;
+  border-radius: 22px;
+  padding: 18px;
+}
+
+.admin-panel h4 {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.admin-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.admin-links-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.relation-editor {
+  background: rgba(255, 255, 255, 0.62);
+  border-radius: 18px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.relation-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.relation-editor-head h5 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .map-wrapper {
@@ -359,6 +637,14 @@ body {
   min-height: 280px;
 }
 
+.card-map {
+  margin: 0 0 8px;
+}
+
+.card-map iframe {
+  min-height: 180px;
+}
+
 @media (min-width: 768px) {
   .app-header {
     padding: 0 24px;
@@ -373,6 +659,26 @@ body {
   .detail-relations-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
+  }
+
+  .students-filters-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .management-create-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .management-menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-form-layout {
+    grid-template-columns: 1fr 2fr;
+  }
+
+  .admin-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
