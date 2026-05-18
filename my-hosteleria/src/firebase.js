@@ -1,5 +1,3 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-
 const rawFirebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'AIzaSyBpx_szcDUPmXWI_zHL3JuPQSBEiUC7K8E',
   authDomain:
@@ -19,6 +17,8 @@ const rawFirebaseConfig = {
 const collectionConfig = {
   administratorCollection:
     process.env.REACT_APP_FIREBASE_ADMINISTRATOR_COLLECTION || 'Administrator',
+  accessRequestsCollection:
+    process.env.REACT_APP_FIREBASE_ACCESS_REQUESTS_COLLECTION || 'AccessRequests',
   alumniCollection: process.env.REACT_APP_FIREBASE_ALUMNI_COLLECTION || 'Alumni',
   restAlumCollection: process.env.REACT_APP_FIREBASE_REST_ALUM_COLLECTION || 'Rest-Alum',
   restaurantCollection: process.env.REACT_APP_FIREBASE_RESTAURANT_COLLECTION || 'Restaurant',
@@ -30,16 +30,11 @@ export const hasFirebaseConfig = requiredConfigKeys.every(
   (key) => typeof rawFirebaseConfig[key] === 'string' && rawFirebaseConfig[key].trim() !== ''
 );
 
-const firebaseApp = hasFirebaseConfig
-  ? getApps().length > 0
-    ? getApp()
-    : initializeApp(rawFirebaseConfig)
-  : null;
-
-export const app = firebaseApp;
+export const app = null;
 export const getFirebaseConfig = () => ({
   ...rawFirebaseConfig,
   ...collectionConfig,
 });
 
+const firebaseApp = app;
 export default firebaseApp;
