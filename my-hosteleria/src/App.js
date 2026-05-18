@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import { getFirebaseConfig, hasFirebaseConfig } from './firebase';
+import logoJoviat from './logo_joviat.webp';
+import noPicture from './no_picture.png';
 
 const baseNavItems = [
   { key: 'inici' },
@@ -22,7 +24,7 @@ const parseAlumniDoc = (doc, index) => {
     nom: firestoreString(fields.Name) || `Alumni ${index + 1}`,
     rol: firestoreString(fields.Status) || 'Sense estat',
     status: firestoreString(fields.Status) || 'Sense estat',
-    imatge: firestoreString(fields.PhotoURL) || '/user_default',
+    imatge: firestoreString(fields.PhotoURL) || noPicture,
     email: firestoreString(fields.email),
     restaurantsIds: [],
     restaurantRoles: [],
@@ -116,6 +118,8 @@ const restaurantToFirestoreFields = (restaurant) => ({
 const buildFirestoreReference = (projectId, collection, id) =>
   `projects/${projectId}/databases/(default)/documents/${collection}/${id}`;
 
+const logoJoviatSrc = logoJoviat.startsWith('/') ? logoJoviat : `/${logoJoviat}`;
+
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('inici');
@@ -147,7 +151,9 @@ function App() {
   const [signUpError, setSignUpError] = useState('');
   const [signUpSuccess, setSignUpSuccess] = useState('');
   const [editingAlumneId, setEditingAlumneId] = useState(null);
+  const [editingRestaurantId, setEditingRestaurantId] = useState(null);
   const [editingForm, setEditingForm] = useState({ nom: '', imatge: '', status: '', email: '' });
+  const [editingRestaurantForm, setEditingRestaurantForm] = useState({ nom: '', adreca: '', imatge: '' });
   const [managementMessage, setManagementMessage] = useState('');
   const [managementError, setManagementError] = useState('');
   const [accessRequests, setAccessRequests] = useState([]);
@@ -157,6 +163,7 @@ function App() {
   const [requestAccessSuccess, setRequestAccessSuccess] = useState('');
   const [restaurantsView, setRestaurantsView] = useState('list');
   const [restaurantsPage, setRestaurantsPage] = useState(1);
+  const [restaurantMapZoom, setRestaurantMapZoom] = useState(8);
   const [managementPage, setManagementPage] = useState('menu');
   const [newAlumneForm, setNewAlumneForm] = useState({
     nom: '',
@@ -512,6 +519,37 @@ function App() {
     );
   }, [restaurants, searchRestaurants]);
 
+  const restaurantsWithLocation = useMemo(
+    () =>
+      filteredRestaurants.filter(
+        (restaurant) =>
+          restaurant.ubicacio &&
+          Number.isFinite(restaurant.ubicacio.latitude) &&
+          Number.isFinite(restaurant.ubicacio.longitude)
+      ),
+    [filteredRestaurants]
+  );
+
+  const restaurantMapBounds = useMemo(() => {
+    if (restaurantsWithLocation.length === 0) {
+      return null;
+    }
+
+    const latitudes = restaurantsWithLocation.map((restaurant) => restaurant.ubicacio.latitude);
+    const longitudes = restaurantsWithLocation.map((restaurant) => restaurant.ubicacio.longitude);
+    const minLat = Math.min(...latitudes);
+    const maxLat = Math.max(...latitudes);
+    const minLng = Math.min(...longitudes);
+    const maxLng = Math.max(...longitudes);
+
+    return {
+      minLat: minLat === maxLat ? minLat - 0.01 : minLat,
+      maxLat: minLat === maxLat ? maxLat + 0.01 : maxLat,
+      minLng: minLng === maxLng ? minLng - 0.01 : minLng,
+      maxLng: minLng === maxLng ? maxLng + 0.01 : maxLng,
+    };
+  }, [restaurantsWithLocation]);
+
   const currentUserProfile = useMemo(
     () => alumnes.find((alumne) => alumne.email.toLowerCase() === authUser?.email?.toLowerCase()) || null,
     [alumnes, authUser]
@@ -525,7 +563,7 @@ function App() {
     if (activePage === 'editProfile' && currentUserProfile) {
       setEditingForm({
         nom: currentUserProfile.nom,
-        imatge: currentUserProfile.imatge === '/user_default' ? '' : currentUserProfile.imatge,
+        imatge: currentUserProfile.imatge === noPicture ? '' : currentUserProfile.imatge,
         status: currentUserProfile.status,
         email: currentUserProfile.email,
       });
@@ -630,7 +668,7 @@ function App() {
         id: authPayload.localId,
         nom: signUpForm.nom.trim() || normalizedEmail.split('@')[0],
         status: signUpForm.status.trim() || 'Nou registre',
-        imatge: signUpForm.imatge.trim() || '/user_default',
+        imatge: signUpForm.imatge.trim() || noPicture,
         email: normalizedEmail,
         restaurantsIds: [],
         restaurantRoles: [],
@@ -713,7 +751,7 @@ function App() {
     setEditingAlumneId(alumne.id);
     setEditingForm({
       nom: alumne.nom,
-      imatge: alumne.imatge === '/user_default' ? '' : alumne.imatge,
+      imatge: alumne.imatge === noPicture ? '' : alumne.imatge,
       status: alumne.status,
       email: alumne.email,
     });
@@ -731,7 +769,7 @@ function App() {
       const updatedProfile = {
         id: alumneId,
         nom: editingForm.nom.trim(),
-        imatge: editingForm.imatge.trim() || '/user_default',
+        imatge: editingForm.imatge.trim() || noPicture,
         status: editingForm.status.trim(),
         email: editingForm.email.trim().toLowerCase(),
       };
@@ -766,6 +804,11 @@ function App() {
   };
 
   const handleDeleteAlumne = async (alumneId) => {
+    const shouldDelete = window.confirm('¿Seguro que quieres eliminar este alumno?');
+    if (!shouldDelete) {
+      return;
+    }
+
     setManagementMessage('');
     setManagementError('');
 
@@ -786,6 +829,99 @@ function App() {
       setManagementMessage('Perfil eliminado correctamente');
     } catch (error) {
       setManagementError(error.message || 'No se ha podido eliminar el perfil');
+    }
+  };
+
+
+
+  const startEditingRestaurant = (restaurant) => {
+    setEditingRestaurantId(restaurant.id);
+    setEditingRestaurantForm({
+      nom: restaurant.nom,
+      adreca: restaurant.adreca,
+      imatge: restaurant.imatge === '/restaurant_default' ? '' : restaurant.imatge,
+    });
+    setManagementMessage('');
+    setManagementError('');
+  };
+
+  const handleSaveRestaurant = async (restaurantId) => {
+    setManagementMessage('');
+    setManagementError('');
+
+    try {
+      const config = getFirebaseConfig();
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const currentRestaurant = restaurants.find((restaurant) => restaurant.id === restaurantId) || {};
+      const updatedRestaurant = {
+        ...currentRestaurant,
+        id: restaurantId,
+        nom: editingRestaurantForm.nom.trim(),
+        adreca: editingRestaurantForm.adreca.trim() || 'Sense adreça',
+        imatge: editingRestaurantForm.imatge.trim() || '/restaurant_default',
+      };
+
+      const patchUrl = new URL(`${baseUrl}/${config.restaurantCollection}/${restaurantId}`);
+      patchUrl.searchParams.set('key', config.apiKey);
+      ['Name', 'Address', 'PhotoURL'].forEach((fieldPath) =>
+        patchUrl.searchParams.append('updateMask.fieldPaths', fieldPath)
+      );
+
+      const response = await fetch(patchUrl.toString(), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: restaurantToFirestoreFields(updatedRestaurant) }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error?.message || 'update-restaurant-error');
+      }
+
+      setRestaurants((current) =>
+        current.map((restaurant) =>
+          restaurant.id === restaurantId ? { ...restaurant, ...updatedRestaurant } : restaurant
+        )
+      );
+      setEditingRestaurantId(null);
+      setManagementMessage('Restaurante actualizado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se ha podido actualizar el restaurante');
+    }
+  };
+
+  const handleDeleteRestaurant = async (restaurantId) => {
+    const shouldDelete = window.confirm('¿Seguro que quieres eliminar este restaurante?');
+    if (!shouldDelete) {
+      return;
+    }
+
+    setManagementMessage('');
+    setManagementError('');
+
+    try {
+      const config = getFirebaseConfig();
+      const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents`;
+      const response = await fetch(
+        `${baseUrl}/${config.restaurantCollection}/${restaurantId}?key=${config.apiKey}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error?.message || 'delete-restaurant-error');
+      }
+
+      setRestaurants((current) => current.filter((restaurant) => restaurant.id !== restaurantId));
+      setAlumnes((current) =>
+        current.map((alumne) => ({
+          ...alumne,
+          restaurantsIds: (alumne.restaurantsIds || []).filter((id) => String(id) !== String(restaurantId)),
+        }))
+      );
+      setManagementMessage('Restaurante eliminado correctamente');
+    } catch (error) {
+      setManagementError(error.message || 'No se ha podido eliminar el restaurante');
     }
   };
 
@@ -895,7 +1031,7 @@ function App() {
         id: authPayload.localId,
         nom: newAlumneForm.nom.trim() || normalizedEmail.split('@')[0],
         status: newAlumneForm.status.trim() || 'Nou registre',
-        imatge: newAlumneForm.imatge.trim() || '/user_default',
+        imatge: newAlumneForm.imatge.trim() || noPicture,
         email: normalizedEmail,
         restaurantsIds: newAlumneForm.links.map((link) => link.restaurantId).filter(Boolean),
         restaurantRoles: [],
@@ -1061,6 +1197,75 @@ function App() {
     </div>
   );
 
+
+
+  const renderRestaurantsMap = () => {
+    if (restaurantsWithLocation.length === 0 || !restaurantMapBounds) {
+      return (
+        <div className="restaurant-map-panel restaurant-map-empty">
+          No hay restaurantes con ubicación para mostrar en el mapa.
+        </div>
+      );
+    }
+
+    const showSummary = restaurantMapZoom < 10;
+    const centerLat = (restaurantMapBounds.minLat + restaurantMapBounds.maxLat) / 2;
+    const centerLng = (restaurantMapBounds.minLng + restaurantMapBounds.maxLng) / 2;
+    const getPosition = ({ latitude, longitude }) => ({
+      left: `${((longitude - restaurantMapBounds.minLng) /
+        (restaurantMapBounds.maxLng - restaurantMapBounds.minLng)) * 86 + 7}%`,
+      top: `${(1 - (latitude - restaurantMapBounds.minLat) /
+        (restaurantMapBounds.maxLat - restaurantMapBounds.minLat)) * 76 + 12}%`,
+    });
+
+    return (
+      <div className="restaurant-map-panel" aria-label="Mapa interactivo de restaurantes">
+        <div className="map-zoom-control">
+          <label htmlFor="restaurant-map-zoom">
+            Zoom del mapa: <strong>{restaurantMapZoom}</strong>
+          </label>
+          <input
+            id="restaurant-map-zoom"
+            type="range"
+            min="6"
+            max="14"
+            value={restaurantMapZoom}
+            onChange={(event) => setRestaurantMapZoom(Number(event.target.value))}
+          />
+          <small>{showSummary ? 'Zoom lejano: resumen agrupado' : 'Zoom cercano: puntos individuales'}</small>
+        </div>
+        <div className={`restaurant-map-canvas ${showSummary ? 'is-summary' : 'is-detailed'}`}>
+          <div className="map-grid-lines" aria-hidden="true" />
+          {showSummary ? (
+            <button
+              type="button"
+              className="map-cluster-marker"
+              style={getPosition({ latitude: centerLat, longitude: centerLng })}
+              onClick={() => setRestaurantMapZoom(11)}
+              aria-label={`Ver ${restaurantsWithLocation.length} restaurantes agrupados`}
+            >
+              <span>{restaurantsWithLocation.length}</span>
+            </button>
+          ) : (
+            restaurantsWithLocation.map((restaurant) => (
+              <button
+                type="button"
+                key={restaurant.id}
+                className="map-restaurant-marker"
+                style={getPosition(restaurant.ubicacio)}
+                onClick={() => navigateToDetail('restaurantDetail', restaurant)}
+                title={restaurant.nom}
+              >
+                <span className="pin-dot" />
+                <span className="pin-label">{restaurant.nom}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const restaurantMapUrl = (restaurant) => {
     if (!restaurant?.ubicacio) {
       return '';
@@ -1092,7 +1297,7 @@ function App() {
           aria-label="Ir al inicio"
           onClick={() => goToPage('inici')}
         >
-          <img src="/logo_joviat.webp" alt="Logo Joviat" className="brand-logo" />
+          <img src={logoJoviatSrc} alt="Logo Joviat" className="brand-logo" />
         </button>
 
         {authUser && (
@@ -1146,7 +1351,6 @@ function App() {
 
       <main className="main-content">
         {renderDataStatus()}
-        {authUser && <p className="auth-badge">{languageText.loginTitle}</p>}
 
         {activePage === 'inici' && (
           <section className="home-hero">
@@ -1677,20 +1881,92 @@ function App() {
                 {restaurants.map((restaurant) => (
                   <article key={restaurant.id} className="detail-page management-card">
                     <img src={restaurant.imatge} alt={restaurant.nom} className="detail-image" />
-                    <h3>{restaurant.nom}</h3>
-                    <p>{restaurant.adreca}</p>
-                    {restaurant.ubicacio && (
-                      <p>
-                        Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
-                      </p>
+                    {editingRestaurantId === restaurant.id ? (
+                      <div className="login-form">
+                        <label>
+                          Nombre
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingRestaurantForm.nom}
+                            onChange={(event) =>
+                              setEditingRestaurantForm((current) => ({ ...current, nom: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Dirección
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingRestaurantForm.adreca}
+                            onChange={(event) =>
+                              setEditingRestaurantForm((current) => ({ ...current, adreca: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          PhotoURL
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={editingRestaurantForm.imatge}
+                            onChange={(event) =>
+                              setEditingRestaurantForm((current) => ({ ...current, imatge: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <div className="management-actions">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => handleSaveRestaurant(restaurant.id)}
+                          >
+                            Guardar cambios
+                          </button>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => setEditingRestaurantId(null)}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <h3>{restaurant.nom}</h3>
+                        <p>{restaurant.adreca}</p>
+                        {restaurant.ubicacio && (
+                          <p>
+                            Ubicación: {restaurant.ubicacio.latitude}, {restaurant.ubicacio.longitude}
+                          </p>
+                        )}
+                        <p>
+                          Alumnos vinculados:{' '}
+                          {(restaurant.alumnesIds || [])
+                            .map((id) => alumneById[String(id)]?.nom)
+                            .filter(Boolean)
+                            .join(', ') || 'Sin datos'}
+                        </p>
+                        <div className="management-actions">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => startEditingRestaurant(restaurant)}
+                          >
+                            Editar restaurante
+                          </button>
+                          <button
+                            type="button"
+                            className="back-button"
+                            onClick={() => handleDeleteRestaurant(restaurant.id)}
+                          >
+                            Eliminar restaurante
+                          </button>
+                        </div>
+                      </>
                     )}
-                    <p>
-                      Alumnos vinculados:{' '}
-                      {(restaurant.alumnesIds || [])
-                        .map((id) => alumneById[String(id)]?.nom)
-                        .filter(Boolean)
-                        .join(', ') || 'Sin datos'}
-                    </p>
                   </article>
                 ))}
               </div>
@@ -1902,15 +2178,7 @@ function App() {
               <p className="login-error">{dataError}</p>
             ) : (
               <>
-                {restaurantsView === 'map' && (
-                  <div className="map-wrapper">
-                    <iframe
-                      title="Mapa de restaurants Joviat"
-                      src="https://www.openstreetmap.org/export/embed.html?bbox=1.8100%2C41.7100%2C1.8600%2C41.7400&layer=mapnik&marker=41.7281%2C1.8272"
-                      loading="lazy"
-                    />
-                  </div>
-                )}
+                {restaurantsView === 'map' && renderRestaurantsMap()}
                 {restaurantsView === 'list' && (
                   <>
                     <div className="restaurants-grid">
