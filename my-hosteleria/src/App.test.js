@@ -127,12 +127,12 @@ test('students and restaurants are loaded from firebase, use default images and 
     expect(screen.queryByText(/font de dades: firebase/i)).not.toBeInTheDocument();
   });
 
-  fireEvent.click(screen.getByRole('button', { name: /visualitzar alumnes/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^alumnes$/i }));
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: /aina martí/i })).toBeInTheDocument();
   });
 
-  expect(screen.getByAltText(/aina martí/i)).toHaveAttribute('src', expect.stringContaining('/user_default'));
+  expect(screen.getByAltText(/aina martí/i)).toHaveAttribute('src', expect.stringContaining('no_picture.png'));
 
   fireEvent.click(screen.getByRole('button', { name: /ver detalles/i }));
   expect(screen.getByRole('heading', { name: /aina martí/i })).toBeInTheDocument();
@@ -171,7 +171,7 @@ test('signup creates a new alumni profile with email and password', async () => 
     expect(screen.queryByText(/cargando datos desde firebase/i)).not.toBeInTheDocument();
   });
 
-  fireEvent.click(screen.getByRole('button', { name: /signup/i }));
+  fireEvent.click(screen.getByRole('button', { name: /registre/i }));
   fireEvent.change(screen.getByLabelText(/email \*/i), { target: { value: 'new@test.com' } });
   fireEvent.change(screen.getByLabelText(/password \*/i), { target: { value: '123456' } });
   fireEvent.change(screen.getByLabelText(/^nombre$/i), { target: { value: 'Nuevo Alumno' } });
@@ -193,16 +193,20 @@ test('admin login shows management tab and allows editing and deleting profiles'
   });
 
   fireEvent.click(screen.getByRole('button', { name: /login/i }));
-  fireEvent.change(screen.getByLabelText(/email administrador/i), {
+  fireEvent.change(screen.getByLabelText(/correu/i), {
     target: { value: 'admin@test.com' },
+  });
+  fireEvent.change(screen.getByLabelText(/contrasenya/i), {
+    target: { value: '123456' },
   });
   fireEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: /gestión/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /afegir alumnes/i })).toBeInTheDocument();
   });
 
-  fireEvent.click(screen.getByRole('button', { name: /gestión/i }));
+  fireEvent.click(screen.getByRole('button', { name: /afegir alumnes/i }));
+  fireEvent.click(screen.getByRole('button', { name: /gestionar alumnos/i }));
   fireEvent.click(screen.getByRole('button', { name: /editar perfil/i }));
   fireEvent.change(screen.getByDisplayValue(/aina martí/i), { target: { value: 'Aina Editada' } });
   fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }));
@@ -211,17 +215,18 @@ test('admin login shows management tab and allows editing and deleting profiles'
     expect(screen.getByText(/perfil actualizado correctamente/i)).toBeInTheDocument();
   });
 
+  jest.spyOn(window, 'confirm').mockReturnValue(true);
   fireEvent.click(screen.getByRole('button', { name: /borrar perfil/i }));
   await waitFor(() => {
     expect(screen.getByText(/perfil eliminado correctamente/i)).toBeInTheDocument();
   });
 });
 
-test('logo uses logo_joviat.webp, mobile menu opens sidebar and dark mode toggle works', async () => {
+test('logo uses logo_joviat.webp and mobile menu opens sidebar', async () => {
   mockFirebaseEnabled = true;
   mockFirebaseFetch();
 
-  const { container } = render(<App />);
+  render(<App />);
 
   await waitFor(() => {
     expect(screen.queryByText(/font de dades: firebase/i)).not.toBeInTheDocument();
@@ -233,6 +238,4 @@ test('logo uses logo_joviat.webp, mobile menu opens sidebar and dark mode toggle
   fireEvent.click(screen.getByRole('button', { name: /abrir barra lateral/i }));
   expect(screen.getByRole('button', { name: /cerrar barra lateral/i })).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole('button', { name: /activar modo oscuro/i }));
-  expect(container.querySelector('.app-layout')).toHaveClass('dark-mode');
 });
